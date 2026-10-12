@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>跑者搭档 RunMate · 跑步训练与身体管理</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ 顶栏 ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13 2L4.5 13.5H11l-1 8.5 8.5-11.5H12l1-8.5z"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>跑者搭档</h1>
+        <p>RunMate · 训练 / 身体 / 饮食 一体化管家</p>
+      </div>
+    </div>
+
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="dash">概览</button>
+      <button class="tab" data-tab="body">身体档案</button>
+      <button class="tab" data-tab="runs">跑步记录</button>
+      <button class="tab" data-tab="goals">目标设定</button>
+      <button class="tab" data-tab="train">训练推荐</button>
+      <button class="tab" data-tab="diet">饮食推荐</button>
+      <button class="tab" data-tab="checkin">每日打卡</button>
+    </nav>
+
+    <div class="topbar-right">
+      <div class="today-pill" id="topToday">--</div>
+      <button class="btn btn-primary btn-sm" id="btnQuickCheckin">今日打卡</button>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- ============ 概览 ============ -->
+    <section class="view active" id="view-dash">
+      <div id="demoBanner"></div>
+      <div class="hero">
+        <div class="hero-left">
+          <div class="hero-hello" id="heroHello">你好，跑者</div>
+          <div class="hero-sub" id="heroSub">今天也一起跑起来吧</div>
+          <div class="hero-actions">
+            <button class="btn btn-primary" data-goto="runs" data-action="new-run">+ 记录一次跑步</button>
+            <button class="btn btn-ghost" data-goto="body" data-action="new-body">+ 更新身体数据</button>
+          </div>
+        </div>
+        <div class="hero-right" id="heroStat"></div>
+      </div>
+
+      <div class="grid grid-4" id="kpiCards"></div>
+
+      <div class="grid grid-2-1">
+        <div class="card">
+          <div class="card-head">
+            <h3>身体状态评估</h3>
+            <span class="card-hint" id="bodyEvalTime"></span>
+          </div>
+          <div id="bodyEvalBox"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>近 8 周跑量</h3></div>
+          <div id="chartWeekly"></div>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head">
+            <h3>目标进度</h3>
+            <button class="link-btn" data-goto="goals">管理目标 →</button>
+          </div>
+          <div id="dashGoals"></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h3>最近跑步</h3>
+            <button class="link-btn" data-goto="runs">全部记录 →</button>
+          </div>
+          <div id="dashRecentRuns"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 身体档案 ============ -->
+    <section class="view" id="view-body">
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head"><h3>基础身体信息</h3><span class="card-hint">用于所有评估与推荐</span></div>
+          <form id="formProfile" class="form">
+            <div class="row">
+              <label class="field">
+                <span>昵称</span>
+                <input type="text" name="name" placeholder="怎么称呼你">
+              </label>
+              <label class="field">
+                <span>性别</span>
+                <select name="gender">
+                  <option value="male">男</option>
+                  <option value="female">女</option>
+                </select>
+              </label>
+            </div>
+            <div class="row">
+              <label class="field">
+                <span>年龄</span>
+                <input type="number" name="age" min="8" max="100" placeholder="例如 24">
+              </label>
+              <label class="field">
+                <span>身高 (cm)</span>
+                <input type="number" name="height" min="100" max="230" step="0.5" placeholder="例如 175">
+              </label>
+            </div>
+            <div class="row">
+              <label class="field">
+                <span>体重 (kg)</span>
+                <input type="number" name="weight" min="25" max="200" step="0.1" placeholder="例如 68.5">
+              </label>
+              <label class="field">
+                <span>体脂率 (%) <em>可留空自动估算</em></span>
+                <input type="number" name="bodyFat" min="3" max="60" step="0.1" placeholder="可留空">
+              </label>
+            </div>
+            <div class="row">
+              <label class="field">
+                <span>静息心率 (次/分)</span>
+                <input type="number" name="restHR" min="30" max="120" placeholder="例如 62">
+              </label>
+              <label class="field">
+                <span>日常活动量</span>
+                <select name="activity">
+                  <option value="1.2">久坐 (办公室为主)</option>
+                  <option value="1.375" selected>轻度活动</option>
+                  <option value="1.55">中度活动</option>
+                  <option value="1.725">高强度活动</option>
+                </select>
+              </label>
+            </div>
+            <div class="row">
+              <label class="field">
+                <span>平均每周睡眠 (小时/天)</span>
+                <input type="number" name="sleep" min="3" max="14" step="0.5" placeholder="例如 7">
+              </label>
+              <label class="field">
+                <span>跑步年限 / 水平</span>
+                <select name="level">
+                  <option value="beginner">新手（跑步少于 6 个月）</option>
+                  <option value="intermediate" selected>进阶（有规律跑步习惯）</option>
+                  <option value="advanced">老手（长期系统训练）</option>
+                </select>
+              </label>
+            </div>
+            <div class="row">
+              <label class="field field-wide">
+                <span>伤病史 / 身体备注</span>
+                <input type="text" name="injury" placeholder="例如：右膝偶尔酸痛 / 无">
+              </label>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">保存身体信息</button>
+              <span class="form-msg" id="profileMsg"></span>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>上传身体状况资料</h3><span class="card-hint">体检单 / 体测报告照片</span></div>
+          <div class="uploader" id="uploader">
+            <input type="file" id="fileReport" accept="image/*" hidden>
+            <div class="uploader-inner" id="uploaderInner">
+              <div class="uploader-icon">＋</div>
+              <div class="uploader-title">点击上传照片或截图</div>
+              <div class="uploader-sub">支持体检报告、体测仪数据、智能手表截图</div>
+            </div>
+          </div>
+          <div class="uploader-tip">
+            <b>小提示：</b>上传后可在下方对照图片，把关键数值（体重 / 体脂 / 静息心率）填入左侧表单，评估会更准确。
+          </div>
+          <div class="report-list" id="reportList"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>身体数据历史</h3>
+          <button class="btn btn-ghost btn-sm" id="btnAddBodyRec">+ 记录一条身体数据</button>
+        </div>
+        <div id="bodyHistory"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>评估详情</h3><span class="card-hint">基于最新身体数据 + 近期跑步表现</span></div>
+        <div id="bodyEvalDetail"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>数据管理</h3><span class="card-hint">所有数据只存在这台设备的浏览器里</span></div>
+        <div class="form-actions">
+          <button class="btn btn-ghost btn-sm" id="btnExport">导出备份 (JSON)</button>
+          <button class="btn btn-ghost btn-sm" id="btnImport">导入备份</button>
+          <input type="file" id="fileImport" accept=".json,application/json" hidden>
+          <button class="btn btn-danger-ghost btn-sm" id="btnReset">清空全部数据</button>
+          <span class="form-msg" id="dataMsg"></span>
+        </div>
+        <div class="uploader-tip" style="margin-top:12px">
+          数据保存在浏览器的 localStorage 中，不会上传到任何服务器。换电脑、换浏览器或清理浏览器数据后会丢失，重要数据建议定期导出备份。
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 跑步记录 ============ -->
+    <section class="view" id="view-runs">
+      <div class="card">
+        <div class="card-head"><h3>添加跑步记录</h3><span class="card-hint">配速与心率区间会自动计算</span></div>
+        <form id="formRun" class="form">
+          <div class="row">
+            <label class="field">
+              <span>日期</span>
+              <input type="date" name="date" required>
+            </label>
+            <label class="field">
+              <span>跑步类型</span>
+              <select name="type">
+                <option value="easy">轻松跑</option>
+                <option value="tempo">节奏跑 / 阈値跑</option>
+                <option value="interval">间歇跑</option>
+                <option value="long">长距离跑</option>
+                <option value="race">比赛 / 测试</option>
+                <option value="recovery">恢复跑</option>
+              </select>
+            </label>
+          </div>
+          <div class="row">
+            <label class="field">
+              <span>距离 (km)</span>
+              <input type="number" name="distance" min="0.1" max="200" step="0.01" placeholder="例如 5.2" required>
+            </label>
+            <label class="field">
+              <span>用时</span>
+              <div class="duration-group">
+                <input type="number" name="h" min="0" max="23" placeholder="时" class="dur">
+                <input type="number" name="m" min="0" max="59" placeholder="分" class="dur" required>
+                <input type="number" name="s" min="0" max="59" placeholder="秒" class="dur">
+              </div>
+            </label>
+          </div>
+          <div class="row">
+            <label class="field">
+              <span>平均心率 (次/分) <em>可选</em></span>
+              <input type="number" name="hr" min="80" max="220" placeholder="例如 152">
+            </label>
+            <label class="field">
+              <span>体感 (1 最轻松 - 10 极限)</span>
+              <input type="range" name="rpe" min="1" max="10" value="5" id="rpeRange">
+              <span class="range-val" id="rpeVal">5</span>
+            </label>
+          </div>
+          <div class="row">
+            <label class="field field-wide">
+              <span>备注</span>
+              <input type="text" name="note" placeholder="例如：绕湖一圈，最后 1km 加速">
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">保存跑步记录</button>
+            <span class="live-pace" id="livePace"></span>
+            <span class="form-msg" id="runMsg"></span>
+          </div>
+        </form>
+      </div>
+
+      <div class="grid grid-3" id="runKpis"></div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>从 Keep / 运动 App 导入</h3>
+          <span class="card-hint">不用手填，把已有数据搬进来</span>
+        </div>
+
+        <div class="import-help">
+          <div class="ih-row">
+            <span class="ih-ico">📲</span>
+            <div><b>从 Keep 拿数据：</b>跑完在 Keep 记录页点「分享」，选「复制链接 / 复制文字」，然后把那段文字粘到下面「粘贴分享文本」里，我来解析。一次可以粘多条。</div>
+          </div>
+          <div class="ih-row">
+            <span class="ih-ico">📄</span>
+            <div><b>有文件更准：</b>如果你有运动手表或第三方工具导出的 <code>.gpx</code> / <code>.tcx</code> / <code>.csv</code>，直接上传，距离和时长会算得更精确（GPX 还能自动算出轨迹距离）。</div>
+          </div>
+          <div class="ih-row warn">
+            <span class="ih-ico">🔒</span>
+            <div><b>关于「扫码一键同步」：</b>Keep 没有对外开放的数据接口，所以没有合规的「扫码授权同步」这回事。任何要你输入 Keep 账号密码的第三方页面都是在盗号，千万别用。本页所有解析都在你自己的浏览器里完成，数据不会离开这台电脑。</div>
+          </div>
+        </div>
+
+        <div class="import-tabs">
+          <button class="imp-tab active" data-imp="text">粘贴分享文本</button>
+          <button class="imp-tab" data-imp="file">上传数据文件</button>
+        </div>
+
+        <div class="imp-pane" id="impPaneText">
+          <textarea id="impText" rows="5" placeholder="把 Keep 分享出来的跑步文案粘贴到这里，例如：&#10;我刚刚用 Keep 跑了 5.00 公里，用时 26 分 30 秒，平均配速 5'18&quot;&#10;&#10;多条之间空一行即可批量导入"></textarea>
+          <div class="form-actions">
+            <button class="btn btn-primary btn-sm" id="impParseText">解析文本</button>
+            <button class="btn btn-ghost btn-sm" id="impDemoText">填入示例试试</button>
+            <span class="form-msg" id="impTextMsg"></span>
+          </div>
+        </div>
+
+        <div class="imp-pane" id="impPaneFile" style="display:none">
+          <div class="dropzone" id="dropZone">
+            <input type="file" id="impFile" accept=".gpx,.tcx,.csv,.tsv,.json,.txt" hidden multiple>
+            <div class="dz-icon">📄</div>
+            <div class="dz-title">点击选择文件，或把文件拖到这里</div>
+            <div class="dz-sub">支持 .gpx · .tcx · .csv / .tsv · .json · .txt，可以一次选多个</div>
+          </div>
+          <div class="form-actions"><span class="form-msg" id="impFileMsg"></span></div>
+        </div>
+
+        <div id="impPreview"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>跑步记录列表</h3>
+          <div class="filters">
+            <select id="runFilter">
+              <option value="all">全部</option>
+              <option value="7">近 7 天</option>
+              <option value="30">近 30 天</option>
+              <option value="90">近 90 天</option>
+            </select>
+          </div>
+        </div>
+        <div id="runList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>近 30 天配速走势</h3></div>
+        <div id="chartPace"></div>
+      </div>
+    </section>
+
+    <!-- ============ 目标设定 ============ -->
+    <section class="view" id="view-goals">
+      <div class="card">
+        <div class="card-head"><h3>设定你的目标</h3><span class="card-hint">可以只设一个，也可以不设</span></div>
+        <form id="formGoal" class="form">
+          <div class="row">
+            <label class="field">
+              <span>目标类型</span>
+              <select name="type" id="goalType">
+                <option value="3k">3 公里</option>
+                <option value="5k" selected>5 公里</option>
+                <option value="10k">10 公里</option>
+                <option value="half">半程马拉松 (21.0975 km)</option>
+                <option value="full">全程马拉松 (42.195 km)</option>
+                <option value="custom">自定义距离</option>
+              </select>
+            </label>
+            <label class="field" id="goalCustomWrap" style="display:none">
+              <span>自定义距离 (km)</span>
+              <input type="number" name="customDistance" min="0.5" max="200" step="0.01" placeholder="例如 15">
+            </label>
+            <label class="field">
+              <span>目标成绩</span>
+              <div class="duration-group">
+                <input type="number" name="h" min="0" max="23" placeholder="时" class="dur">
+                <input type="number" name="m" min="0" max="59" placeholder="分" class="dur">
+                <input type="number" name="s" min="0" max="59" placeholder="秒" class="dur">
+              </div>
+            </label>
+          </div>
+          <div class="row">
+            <label class="field">
+              <span>或者直接设目标配速 (mm:ss / km)</span>
+              <input type="text" name="pace" placeholder="例如 5:30，留空则以目标成绩为准">
+            </label>
+            <label class="field">
+              <span>目标日期 (可选)</span>
+              <input type="date" name="targetDate">
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">保存目标</button>
+            <span class="form-msg" id="goalMsg"></span>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>目标与当前水平对比</h3></div>
+        <div id="goalList"></div>
+      </div>
+    </section>
+
+    <!-- ============ 训练推荐 ============ -->
+    <section class="view" id="view-train">
+      <div id="trainBox"></div>
+    </section>
+
+    <!-- ============ 饮食推荐 ============ -->
+    <section class="view" id="view-diet">
+      <div id="dietBox"></div>
+    </section>
+
+    <!-- ============ 每日打卡 ============ -->
+    <section class="view" id="view-checkin">
+      <div class="grid grid-3" id="checkinKpis"></div>
+      <div class="card">
+        <div class="card-head">
+          <h3 id="calTitle">打卡日历</h3>
+          <div class="cal-nav">
+            <button class="btn btn-ghost btn-sm" id="calPrev">← 上月</button>
+            <button class="btn btn-ghost btn-sm" id="calToday">本月</button>
+            <button class="btn btn-ghost btn-sm" id="calNext">下月 →</button>
+          </div>
+        </div>
+        <div class="cal-weekhead">
+          <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div class="cal-legend">
+          <span><i class="dot dot-run"></i>有跑步</span>
+          <span><i class="dot dot-check"></i>已打卡</span>
+          <span><i class="dot dot-today"></i>今天</span>
+        </div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head"><h3>打卡统计</h3></div>
+          <div id="checkinStats"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>打卡寄语</h3></div>
+          <div id="checkinWords" class="words"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    跑者搭档 RunMate · 全部数据保存在你的浏览器本地，不会上传任何服务器
+  </footer>
+</div>
+
+<!-- ============ 悬浮智能小助手 ============ -->
+<div class="assistant" id="assistant">
+  <div class="assistant-bubble" id="assistantBubble">
+    <div class="bubble-text" id="bubbleText"></div>
+    <button class="bubble-close" id="bubbleClose" aria-label="关闭">×</button>
+  </div>
+  <button class="assistant-body" id="assistantBody" aria-label="智能小助手">
+    <span class="assistant-ring"></span>
+    <svg viewBox="0 0 120 120" class="assistant-svg" id="assistantSvg"></svg>
+  </button>
+  <div class="assistant-panel" id="assistantPanel">
+    <div class="panel-head">
+      <div class="panel-title">
+        <span class="panel-dot"></span>搭档 · 小跑
+      </div>
+      <div class="panel-head-actions">
+        <button class="panel-icon-btn" id="chatClear" title="清空对话">🗑</button>
+        <button class="panel-close" id="panelClose">×</button>
+      </div>
+    </div>
+    <div class="chat-log" id="chatLog"></div>
+    <div class="chat-quick" id="chatQuick"></div>
+    <form class="chat-input" id="chatForm" autocomplete="off">
+      <input type="text" id="chatInput" placeholder="问我任何跑步的问题…" autocomplete="off">
+      <button type="submit" class="chat-send" id="chatSend" aria-label="发送">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 19V5M5 12l7-7 7 7"/>
+        </svg>
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/store.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/coach.js"></script>
+<script src="js/chat.js"></script>
+<script src="js/importer.js"></script>
+<script src="js/assistant.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
