@@ -29,6 +29,7 @@ var LLM = (function () {
   var calls = 0;
   var lastAt = 0;
   var queue = Promise.resolve();
+  var lastRaw = '';
 
   function log() {
     try { console.log.apply(console, ['[LLM]'].concat([].slice.call(arguments))); } catch (e) { }
@@ -163,6 +164,7 @@ var LLM = (function () {
 
         collect(params).then(function (text) {
           if (!text) { cb(false, 'empty'); return; }
+          lastRaw = text;
           cb(true, text);
         }).catch(function (e) {
           var code = e && e.error && e.error.code ? e.error.code : '';
@@ -201,6 +203,7 @@ var LLM = (function () {
       return { state: STATE, model: model ? (model.name || model.id) : null, calls: calls, reason: reason };
     },
     isReady: function () { return STATE === 'ready'; },
+    lastRaw: function () { return lastRaw; },
     _pickModel: pickModel,
     _reset: function () { STATE = 'idle'; client = null; model = null; calls = 0; reason = ''; }
   };
