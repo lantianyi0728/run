@@ -64,6 +64,7 @@ var Chat = (function () {
         '· 目标：「我的目标还差多少」「多久能达成」\n' +
         '· 训练：「我该怎么练」「跑量该加到多少」「我的心率区间」\n' +
         '· 吃穿：「我该吃什么」「今天适合跑步吗」「膝盖疼怎么办」\n' +
+        '· 闲聊：「最近有什么好看的剧」「陪我说说话」—— 这个不用讲数据，随便聊。\n' +
         '直接打字问我就行，不用讲究措辞。'
     };
   };
@@ -369,10 +370,323 @@ var Chat = (function () {
       '我的身体状态怎么样？'
     ];
     return {
-      ico: '🤔', text: '这个问题我还没学会。我目前最擅长这些：' + s.join('、') +
-        '。你也可以直接问我「你能做什么」看看全部能力。'
+      ico: '💬',
+      text: '这个我没法用数据回答，不过我可以陪你聊 —— 想聊训练就说「' + s.slice(0, 3).join('」「') +
+        '」；想聊点别的也行，最近在看什么小说、追什么剧、听什么歌，都可以跟我说。'
     };
   };
+
+  /* ---------------- 复读：同一个问题不答第二遍一样的 ---------------- */
+
+  var recent = [];
+
+  function normQ(s) {
+    return plain(s).replace(/[?？。！!，,、~～：:；;"'（）()]/g, '');
+  }
+
+  /* 记一次提问，返回 30 分钟内这是第几次问同一个问题 */
+  function markAsk(question, id) {
+    var k = normQ(question), now = Date.now();
+    recent = recent.filter(function (r) { return now - r.ts < 30 * 60 * 1000; });
+    for (var i = 0; i < recent.length; i++) {
+      if (recent[i].k === k && recent[i].id === id) {
+        recent[i].n += 1;
+        recent[i].ts = now;
+        return recent[i].n;
+      }
+    }
+    recent.push({ k: k, id: id, n: 1, ts: now });
+    return 1;
+  }
+
+  function weekdayName(dateStr) {
+    return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][
+      new Date(dateStr + 'T00:00:00').getDay()];
+  }
+
+  /* 第二次问同一件事时改答这些：只讲之前没讲过的那个角度，绝不换汤不换药 */
+  var MORE = {};
+
+  MORE.today = function (c) {
+    var w = Store.runsSince(7);
+    var days = {};
+    w.forEach(function (r) { days[r.date] = 1; });
+    var moved = Object.keys(days).length;
+    return {
+      ico: '📐',
+      text: '今天这句刚说过了，换个角度：近 7 天里你真正动了 ' + moved + ' 天，休了 ' + (7 - moved) + ' 天。' +
+        (moved >= 5 ? ' 这个频率不低了，剩下两天可以放心休。' : ' 休息日比训练日还多，先把频率提上来，比单次跑多远管用。')
+    };
+  };
+
+  MORE.week_volume = function (c) {
+    var w = Store.runsSince(7);
+    if (!w.length) return null;
+    var sorted = w.slice().sort(function (a, b) { return b.distance - a.distance; });
+    var max = sorted[0], min = sorted[sorted.length - 1];
+    return {
+      ico: '📐',
+      text: '总数说过了，说点结构：这 7 天最长一次是 ' + max.date + ' 的 ' + max.distance + ' km，最短一次 ' +
+        min.distance + ' km。' +
+        (max.distance >= min.distance * 2.5 ? ' 长短差得有点多，长距离那趟后记得留一天恢复。' : ' 长短比较均匀，这种节奏最不容易伤。')
+    };
+  };
+
+  MORE.month_volume = function (c) {
+    var m = c.today.slice(0, 7);
+    var mr = c.runs.filter(function (r) { return r.date.slice(0, 7) === m; });
+    if (!mr.length) return null;
+    var sorted = mr.slice().sort(function (a, b) { return b.distance - a.distance; });
+    var max = sorted[0];
+    return {
+      ico: '📐',
+      text: '换个角度：本月单次最远是 ' + max.date + ' 的 ' + max.distance + ' km，' +
+        (max.distance >= 15 ? '已经够长距离的标准了。' : '还没有一次真正意义上的长距离，想提升耐力可以安排一次 60 分钟以上的慢跑。')
+    };
+  };
+
+  MORE.total_volume = function (c) {
+    var total = Calc.totalKm(c.runs);
+    var recent28 = Calc.totalKm(c.runs.filter(function (r) { return Store.daysBetween(r.date, c.today) <= 27; }));
+    return {
+      ico: '📐',
+      text: '换个角度：平均每次 ' + Calc.round(total / c.runs.length, 1) + ' km；最近 4 周的 ' + recent28 +
+        ' km 占了全部的 ' + Math.round(recent28 / total * 100) + '%。' +
+        (recent28 / total > 0.5 ? ' 说明你最近练得比早期勤。' : ' 早期跑得更多，最近有点松。')
+    };
+  };
+
+  MORE.last_run = function (c) {
+    var r = c.runs[0];
+    var all = c.runs.filter(function (x) { return x.id !== r.id; });
+    var base = Calc.avgPaceOf(all);
+    if (!base) return null;
+    var mine = r.seconds / r.distance;
+    var diff = Math.round(base - mine);
+    return {
+      ico: '📐',
+      text: '换个角度：这次配速比你的历史平均' +
+        (Math.abs(diff) <= 2 ? '几乎一样，状态很稳。' :
+          diff > 0 ? '快了 ' + diff + ' 秒，属于状态好的一天。' : '慢了 ' + Math.abs(diff) + ' 秒。')
+    };
+  };
+
+  MORE.pace = function (c) {
+    var src = Store.runsSince(30);
+    if (!src.length) src = c.runs;
+    if (src.length < 2) return null;
+    var ps = src.map(function (r) { return r.seconds / r.distance; }).sort(function (a, b) { return a - b; });
+    var spread = Math.round(ps[ps.length - 1] - ps[0]);
+    return {
+      ico: '📐',
+      text: '换个角度：近 30 天你最快和最慢一次差了 ' + spread + ' 秒/公里。' +
+        (spread > 60 ? ' 波动挺大，多半是有的课跑太快、有的又是硬撑，把轻松跑真的跑慢，差距会收窄。'
+          : ' 波动不大，说明你对自己的强度控制得住。')
+    };
+  };
+
+  MORE.body = function (c) {
+    if (!hasBody(c)) return null;
+    var items = c.ev.items.filter(function (i) { return i.score !== null; })
+      .sort(function (a, b) { return a.score - b.score; });
+    var weak = items[0];
+    if (!weak) return null;
+    return {
+      ico: '📐',
+      text: '换个角度：五项里最拖后腿的是「' + weak.name + '」，当前 ' + weak.value + '，得分 ' + weak.score +
+        '。这一项通常不是练出来的，是睡和吃出来的 —— 先把它补两周，总分涨得比加跑量快。'
+    };
+  };
+
+  MORE.analyse = function (c) {
+    var split = Coach.intensitySplit(c.runs);
+    if (!split.hasData) return null;
+    var hard = 100 - split.easy;
+    return {
+      ico: '📐',
+      text: '换个角度说强度分布：轻松跑占 ' + split.easy + '%，强度课占 ' + hard + '%。' +
+        (split.easy >= 75 ? ' 在 80/20 的合理范围内。' : ' 理想是轻松跑 75-80%，你现在反过来了 —— 这是很多人卡在瓶颈的真正原因。')
+    };
+  };
+
+  MORE.goal = function (c) {
+    if (!c.goals.length) return null;
+    var ga = Coach.goalAnalysis(c.goals, c.runs);
+    var g = ga[0];
+    if (!g || !g.predicted || g.gap === null || g.gap <= 0) return null;
+    var perWeek = Math.round(g.gap / 8);
+    return {
+      ico: '📐',
+      text: '换个角度：把差距摊开算，接下来 8 周你每周只要快 ' + perWeek + ' 秒/公里，目标就能摸到。' +
+        '这个量级靠「每周一次阈値跑」就够了，不需要天天拼命。'
+    };
+  };
+
+  MORE.train = function (c) {
+    var today = weekdayName(c.today);
+    var cell = null;
+    c.plan.plan.forEach(function (d) { if (d.day === today) cell = d; });
+    if (!cell) return null;
+    if (cell.rest) {
+      return { ico: '📐', text: '换个角度：今天课表上是休息日。别小看这一天 —— 训练是在休息里变强的，今天走 20 分钟就够。' };
+    }
+    return {
+      ico: '📐',
+      text: '换个角度，只看今天：' + today + ' 是「' + cell.type + '」' + cell.km + ' km' +
+        (cell.pace ? '，配速控制在 ' + Calc.fmtPace(cell.pace.sec) : '') +
+        '。做完这一格，这周就算成功了一半。'
+    };
+  };
+
+  MORE.volume_advice = function (c) {
+    var v = c.vol;
+    var gap = Calc.round(v.recommend - v.current, 1);
+    return {
+      ico: '📐',
+      text: '换个角度：你现在周均 ' + v.current + ' km，建议值 ' + v.recommend + ' km，' +
+        (gap > 0 ? '还差 ' + gap + ' km，摊到一周三次就是每次多 1-2 km，几乎感觉不到。' : '已经够了，接下来的重点是别再往上加。')
+    };
+  };
+
+  MORE.diet = function (c) {
+    if (!c.diet.ok) return null;
+    return {
+      ico: '📐',
+      text: '换个角度说跑后那顿：跑完 30-60 分钟内吃，碳水 + 蛋白按 3:1 配。' +
+        '今天的量大概 ' + Math.round(c.diet.carbs * 0.3) + ' g 碳水 + ' + Math.round(c.diet.protein * 0.3) +
+        ' g 蛋白，一碗米饭配个鸡蛋和一杯牛奶就到了。'
+    };
+  };
+
+  MORE.heart = function (c) {
+    var mhr = Calc.maxHR(c.p.age);
+    if (!mhr) return null;
+    var z = Calc.hrZones(mhr);
+    return {
+      ico: '📐',
+      text: '换个角度，不背区间表，只说手感：Z2 就是「能完整说一句话、但唱歌会喘」的那个速度，心率大概 ' +
+        z[1].text + '。跑的时候能跟人聊天，就说明没跑快。'
+    };
+  };
+
+  MORE.checkin = function (c) {
+    var m = c.today.slice(0, 7);
+    var n = 0;
+    Object.keys(c.checkins).forEach(function (d) { if (d.slice(0, 7) === m) n++; });
+    var day = +c.today.slice(8);
+    return {
+      ico: '📐',
+      text: '换个角度：本月已经过 ' + day + ' 天，你打卡 ' + n + ' 天，打卡率 ' + Math.round(n / day * 100) +
+        '%。' + (n / day >= 0.6 ? ' 这个比例很健康，不用追满分。' : ' 不用追满分，先把「每周至少三次」稳住。')
+    };
+  };
+
+  MORE.weather = function () {
+    return {
+      ico: '🌤️',
+      text: '天气刚说过了。换个判断方式：出门前看三件事 —— 有没有雷、能见度够不够、体感是不是闷。' +
+        '三样都过关就跑，跑慢一点；有一项不行就改室内。'
+    };
+  };
+
+  MORE.injury = function () {
+    return {
+      ico: '🩹',
+      text: '不再重复那四条了，补一个更实用的判断：按「什么时候疼」分 —— 跑前就疼，别跑；' +
+        '跑到一半才疼、停下就缓解，可以减量试一次；跑完疼到第二天早上还疼，直接停两周。'
+    };
+  };
+
+  MORE.improve = function (c) {
+    return {
+      ico: '📐',
+      text: '换个具体点的说法：想变快，一周只需要一堂质量课。' +
+        '按你现在的水平，那堂课应该是「20 分钟能说短句但说不出整句」的强度，插在两次轻松跑中间，前后各留一天。'
+    };
+  };
+
+  MORE.fatloss = function () {
+    return {
+      ico: '📐',
+      text: '换个角度：减脂期最容易被砍掉的是力量训练。每周两次、每次 20 分钟（深蹲 / 俯卧撑 / 平板），' +
+        '能保住肌肉，体重掉得慢一点但线条会更好看。'
+    };
+  };
+
+  MORE.sleep = function () {
+    return {
+      ico: '📐',
+      text: '换个角度，说个今天就能做的：睡前一小时把屏幕放下，房间降到 20-22℃。' +
+        '跑步的人最容易犯的错是「练完太兴奋，躺床上刷手机到一点」。'
+    };
+  };
+
+  MORE.warmup = function () {
+    return {
+      ico: '📐',
+      text: '补一句最常被搞反的：跑前做动态拉伸（高抬腿、弓步走），别做静态压腿 —— 冷着身子拉伸反而更容易拉伤。' +
+        '静态拉伸放到跑后。'
+    };
+  };
+
+  MORE.best = function (c) {
+    var keys = Object.keys(c.pred);
+    if (!keys.length) return null;
+    return {
+      ico: '📐',
+      text: '换个角度：这些预测里，5 公里那项最可信 —— 距离越接近你平时跑的量，外推误差越小。' +
+        '全马那项只能当个念想，别拿它定训练计划。'
+    };
+  };
+
+  MORE.race = function () {
+    return {
+      ico: '📐',
+      text: '补赛前一周的吃法：前 3 天正常吃、别刻意补；倒数第 2 天开始每餐多加一份主食；' +
+        '比赛当天提前 3 小时吃完早餐，之后只吃好消化的。别在比赛日试新东西。'
+    };
+  };
+
+  MORE.hydration = function () {
+    return {
+      ico: '📐',
+      text: '补一句电解质：跑超过 60 分钟、或者衣服能拧出水，就要喝含钠的饮料。' +
+        '只灌白水会稀释血钠，越喝越没劲，严重了还会头晕。'
+    };
+  };
+
+  MORE.greet = function (c) {
+    return {
+      ico: '👋',
+      text: '又见面了。不用每次都打招呼，直接说事就行 —— 想问数据、想吐槽、想聊点别的，都行。'
+    };
+  };
+
+  MORE.help = function () {
+    return {
+      ico: '🙋',
+      text: '能力清单刚给过了。说三个不常被点到的：\n' +
+        '· 「我的心率区间」—— 按年龄算五个区，告诉你轻松跑该多慢\n' +
+        '· 「多久能达成目标」—— 按当前水平外推，给个现实的时间窗\n' +
+        '· 随便聊 —— 小说、剧、今天过得怎么样，都接得住'
+    };
+  };
+
+  /* 没有专属角度的意图，用一句「换个问法」把话头递回去，别复读 */
+  var PIVOT = [
+    '这条刚才说过了，我不重复。要不换个方向：你现在最想解决的是「今天怎么跑」，还是「三个月后想跑到什么水平」？',
+    '同一个问题我就不念第二遍了。聊点别的也行 —— 最近在看什么小说、追什么剧？跑的事随时能捡回来。',
+    '这个答案你听过了。我更好奇另一件事：最近哪一次跑完，你自己觉得最舒服？'
+  ];
+
+  function moreAnswer(id, c) {
+    var fn = MORE[id];
+    if (fn) {
+      var r = fn(c);
+      if (r) return r;
+    }
+    return { ico: '💬', text: PIVOT[Math.floor(Math.random() * PIVOT.length)] };
+  }
 
   /* ---------------- 意图表 ---------------- */
   var INTENTS = [
@@ -424,8 +738,12 @@ var Chat = (function () {
     var q = plain(question);
     if (!q) { cb({ ico: '💬', text: '想问我什么？', intent: 'fallback' }); return; }
     var id = matchIntent(q) || 'fallback';
+    var times = markAsk(question, id);
     var c = context();
     var fn = H[id] || H.fallback;
+    // 第二遍换个没讲过的角度；第三遍起不再复述，直接把话头带开
+    if (times === 2) fn = function (ctx) { return moreAnswer(id, ctx); };
+    else if (times >= 3) fn = function () { return { ico: '💬', text: PIVOT[(times - 3) % PIVOT.length] }; };
     var done = false;
     var respond = function (res) {
       if (done) return;
@@ -434,6 +752,8 @@ var Chat = (function () {
         res = { ico: '💬', text: '我没想好怎么回答，换个说法试试？' };
       }
       res.intent = id;             // 让双智能体知道这句话属于哪一类
+      res.times = times;           // 这是第几次问同一个问题
+      res.repeat = times >= 2;
       cb(res);
     };
     var ret = fn(c, respond);
@@ -464,6 +784,7 @@ var Chat = (function () {
     suggestions: suggestions,
     setWeatherProvider: setWeatherProvider,
     _matchIntent: matchIntent,
-    _context: context
+    _context: context,
+    _resetRecent: function () { recent = []; }
   };
 })();

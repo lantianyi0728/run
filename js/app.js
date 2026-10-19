@@ -146,6 +146,7 @@
   }
 
   /* ================= 顶部 / 切换 ================= */
+
   function renderTopbar() {
     $('#topToday').textContent = cnDate(Store.today());
     var done = Store.isChecked(Store.today());
@@ -154,16 +155,67 @@
     btn.className = 'btn btn-sm ' + (done ? 'btn-ghost' : 'btn-primary');
   }
 
+  /* 导航归成 5 项；「我的数据」「训练计划」是合并页，里面再用二级页签分 */
+  var GROUPS = {
+    data: {
+      label: '我的数据',
+      views: [['body', '身体档案'], ['runs', '跑步记录'], ['checkin', '每日打卡']]
+    },
+    plan: {
+      label: '训练计划',
+      views: [['train', '训练推荐'], ['goals', '目标设定']]
+    }
+  };
+
+  /* 视图 → 所属分组 */
+  var VIEW_GROUP = {};
+  Object.keys(GROUPS).forEach(function (g) {
+    GROUPS[g].views.forEach(function (v) {
+      VIEW_GROUP[v[0]] = { group: g, label: v[1] };
+    });
+  });
+
+  function renderSubtabs(activeView) {
+    var box = $('#subtabs');
+    if (!box) return;
+    var hit = VIEW_GROUP[activeView];
+    if (!hit) { box.hidden = true; box.innerHTML = ''; return; }
+    var g = GROUPS[hit.group];
+    box.hidden = false;
+    box.innerHTML = g.views.map(function (v) {
+      return '<button class="subtab' + (v[0] === activeView ? ' active' : '') +
+        '" data-tab="' + v[0] + '">' + v[1] + '</button>';
+    }).join('');
+  }
+
   function switchTab(name) {
-    $$('#tabs .tab').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === name); });
-    $$('.view').forEach(function (v) { v.classList.toggle('active', v.id === 'view-' + name); });
-    Store.setUI('lastTab', name);
+    var view = name;
+    var nav = name;
+
+    // 点的是合并页的分组名 → 回到上次看的那一页，没有就取第一页
+    if (GROUPS[name]) {
+      var last = Store.getUI()['sub_' + name];
+      var ok = GROUPS[name].views.some(function (v) { return v[0] === last; });
+      view = ok ? last : GROUPS[name].views[0][0];
+    }
+    // 点的是组内某页 → 顶层高亮那个组
+    if (VIEW_GROUP[name]) nav = VIEW_GROUP[name].group;
+
+    $$('#tabs .tab').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === nav); });
+    $$('.view').forEach(function (v) { v.classList.toggle('active', v.id === 'view-' + view); });
+
+    renderSubtabs(view);
+    if (VIEW_GROUP[view]) {
+      try { Store.setUI('sub_' + VIEW_GROUP[view].group, view); } catch (e) { }
+    }
+
+    Store.setUI('lastTab', view);
 
     // 主对话页是助手"全屏展开"的样子，所以那一页不显示右下角助手，
     // 切到其它页才把它放出来
-    if (window.Assistant && window.Assistant.onTabChange) window.Assistant.onTabChange(name);
+    if (window.Assistant && window.Assistant.onTabChange) window.Assistant.onTabChange(view);
 
-    if (name === 'agent') window.scrollTo({ top: 0 });
+    if (view === 'agent') window.scrollTo({ top: 0 });
     else window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -716,6 +768,14 @@
       var b = e.target.closest('.tab');
       if (b) switchTab(b.dataset.tab);
     });
+    /* 二级页签 */
+    var subBox = $('#subtabs');
+    if (subBox) {
+      subBox.addEventListener('click', function (e) {
+        var b = e.target.closest('.subtab');
+        if (b) switchTab(b.dataset.tab);
+      });
+    }
     document.addEventListener('click', function (e) {
       var g = e.target.closest('[data-goto]');
       if (g) {
@@ -1324,7 +1384,7 @@
     // 支持通过链接直接打开某个页面，例如 index.html?tab=train
     // 没有指定时，默认落在「智能教练搭子」——打开网页先看到对话
     var urlTab = (location.search.match(/[?&]tab=([a-z]+)/) || [])[1];
-    if (urlTab && $('#view-' + urlTab)) switchTab(urlTab);
+    if (urlTab && ($('#view-' + urlTab) || GROUPS[urlTab])) switchTab(urlTab);
     else switchTab('agent');
     if (window.Assistant) window.Assistant.init();
   }

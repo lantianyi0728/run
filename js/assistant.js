@@ -22,6 +22,7 @@ var Assistant = (function () {
 
   var timer = null, hideTimer = null, started = false, typing = false;
   var lastText = '';
+  var saidRecent = [];     // 最近主动说过的几句，避免隔几分钟又说一遍
   var weather = null;
   var log = [];            // [{role:'bot'|'me', who, ico, name, text, ts}]
 
@@ -34,6 +35,7 @@ var Assistant = (function () {
     return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
   }
   function rand(a, b) { return a + Math.floor(Math.random() * (b - a)); }
+  function pickOne(arr, seed) { return arr[Math.abs(seed) % arr.length]; }
 
   /* ================= Q 版角色 ================= */
 
@@ -287,7 +289,7 @@ var Assistant = (function () {
     if (big) {
       return '<div class="chat-empty">这里坐着两个人 👇<br>' +
         '<b>陈教</b> 负责算你的训练，<b>小跑</b> 负责陪你别放弃。<br>' +
-        '直接打字问就行，也可以点左边的「可以这样问」。</div>';
+        '问训练、聊点别的都行 —— 左边有几个现成的问题可以点。</div>';
     }
     return '<div class="chat-empty">嗨，我是小跑 👋<br>可以直接打字问我，比如<br>' +
       '「这周跑了多少」「我该怎么练」</div>';
@@ -396,6 +398,9 @@ var Assistant = (function () {
   /* 主动说一句（单声部） */
   function say(ico, text, who) {
     if (!text || text === lastText) return;
+    if (saidRecent.indexOf(text) >= 0) return;   // 同样的话这次会话里不重复第二遍
+    saidRecent.push(text);
+    if (saidRecent.length > 10) saidRecent.shift();
     lastText = text;
     addMsg('bot', ico, text, false, who || 'buddy');
   }
@@ -509,9 +514,10 @@ var Assistant = (function () {
       }
     }
     var pool = dynamicMessages();
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < 8; i++) {
       var m = pool[Math.floor(Math.random() * pool.length)];
       if (!m || m.text === lastText) continue;
+      if (saidRecent.indexOf(m.text) >= 0) continue;
       say(m.ico, m.text, 'buddy');
       return;
     }
@@ -541,35 +547,75 @@ var Assistant = (function () {
   }
 
   /* ================= 开场 ================= */
+  /* 每天都要说两句，但绝不能像复读机 —— 同一个意思准备几种说法，按日期轮换 */
+
+  function coachOpen(d, seed, met) {
+    // 自我介绍只说第一次，之后开口就直奔内容
+    var intro = met ? '' : '我是陈教。';
+
+    if (!d.totalRuns) {
+      return intro + pickOne([
+        '现在一条记录都没有，我暂时无话可说 —— 先去跑 20 分钟，回来我们就有得聊了。',
+        '第一件事：先跑一次，哪怕 20 分钟，让我有东西可算。'
+      ], seed);
+    }
+    if (d.gapDays >= 5) {
+      return intro + pickOne([
+        '你已经 ' + d.gapDays + ' 天没跑了，再拖下去，之前攒的有氧底子会开始掉。今天先恢复 20 分钟。',
+        '停训 ' + d.gapDays + ' 天，重回跑道的第一趟一定觉得沉，这很正常。别按老配速跑，走跑结合 20 分钟。'
+      ], seed);
+    }
+    if (d.body && d.body.score < 60) {
+      return intro + pickOne([
+        '身体评分 ' + d.body.score + ' 分，偏低。这两天别冲量，先把睡眠补回来。',
+        d.body.score + ' 分这个状态不适合加量，训练可以先等两天，把觉睡够更要紧。'
+      ], seed);
+    }
+    var trend = d.deltaPct === null ? '刚起头，先跑稳。'
+      : d.deltaPct >= 10 ? '在往上走，节奏是对的。'
+        : d.deltaPct <= -15 ? '比上周少了，得盯一下。'
+          : '基本持平，保持住。';
+    return intro + pickOne([
+      '近 7 天 ' + d.weekKm + ' km，' + trend,
+      '账我算过了：近 7 天 ' + d.weekKm + ' km，' + trend,
+      d.weekKm + ' km / 7 天，' + trend + ' 有具体想问的直接说。'
+    ], seed);
+  }
+
+  function buddyOpen(d, when, name, seed) {
+    var met = true;
+    try { met = !!Store.getUI().metBuddy; } catch (e) { }
+
+    var state = d.checkedToday ? '今天已经打过卡了，我不催你，陪你聊两句。'
+      : d.streak >= 3 ? '连着 ' + d.streak + ' 天了，今天别断在这儿。'
+        : d.gapDays !== null && d.gapDays >= 3 ? '有 ' + d.gapDays + ' 天没动了，今天先走 20 分钟？'
+          : '今天想跑点什么？';
+
+    if (!met) {
+      // 第一次见，才自我介绍
+      return when + '，' + name + '。我是小跑，就住在你旁边这一格 —— ' + state;
+    }
+    // 之后不再重复自我介绍，换着说法开口
+    return pickOne([
+      when + '，' + name + '。' + state,
+      when + '。' + state + ' 也可以聊点别的，我今天不催你。',
+      '我在这儿，' + when + '。' + state
+    ], seed);
+  }
 
   function opening() {
     var d = AgentBus.data();
     var h = new Date().getHours();
     var when = h < 5 ? '这个点还没睡' : h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好';
     var name = d.name;
-
-    var coachTxt;
-    if (!d.totalRuns) {
-      coachTxt = '我是陈教。你还没有一条跑步记录，所以我没法给你任何判断。先跑一次，哪怕 20 分钟，剩下的我来。';
-    } else if (d.gapDays >= 5) {
-      coachTxt = '我是陈教。你已经 ' + d.gapDays + ' 天没跑了，这个间隔再拖下去，之前攒的有氧底子会开始掉。今天先恢复 20 分钟。';
-    } else if (d.body && d.body.score < 60) {
-      coachTxt = '我是陈教。你现在身体评分 ' + d.body.score + ' 分，偏低。这两天别冲量，先把睡眠补回来。';
-    } else {
-      coachTxt = '我是陈教。近 7 天 ' + d.weekKm + ' km，' +
-        (d.deltaPct === null ? '刚起头，先跑稳。' :
-          d.deltaPct >= 10 ? '在往上走，节奏是对的。' :
-            d.deltaPct <= -15 ? '比上周少了，得盯一下。' : '基本持平，保持住。');
-    }
-
-    var buddyTxt = when + '，' + name + '。我是小跑，就住在你旁边这一格 —— ' +
-      (d.checkedToday ? '今天已经打过卡了，我不催你，陪你聊两句。'
-        : d.streak >= 3 ? '你已经连着 ' + d.streak + ' 天了，今天别断在这儿。'
-          : '不着急，先跟我说说今天什么状态。');
+    // 按「日期 + 小时」播种：同一天内稳定，换一天就换一种说法
+    var seed = Store.daysBetween('2026-01-01', Store.today()) * 7 + h;
+    var met = true;
+    try { met = !!Store.getUI().metBuddy; } catch (e) { }
 
     return [
-      { who: 'coach', ico: '🧑‍🏫', name: '陈教 · 教练', text: coachTxt },
-      { who: 'buddy', ico: '🐣', name: '小跑 · 搭子', text: buddyTxt }
+      { who: 'coach', ico: '🧑‍🏫', name: '陈教 · 教练', text: coachOpen(d, seed, met) },
+      { who: 'buddy', ico: '🐣', name: '小跑 · 搭子', text: buddyOpen(d, when, name, seed) }
     ];
   }
 
@@ -698,6 +744,7 @@ var Assistant = (function () {
       if (log.length > CHAT_MAX) log = log.slice(-CHAT_MAX);
       saveChat();
       Store.setUI('greetedOn', today);
+      Store.setUI('metBuddy', true);   // 自我介绍只说一次
       renderChat();
       renderQuick();
       if (!chatVisible()) showDialog(pair);

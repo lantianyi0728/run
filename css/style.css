@@ -118,6 +118,22 @@ a{color:inherit;}
 .main{padding-top:20px;}
 .view{display:none;animation:fadeUp .32s ease;}
 .view.active{display:block;}
+
+/* 二级页签：合并页（我的数据 / 训练计划）内部的分段控件 */
+.subtabs{
+  display:flex;gap:4px;padding:4px;margin-bottom:4px;
+  background:rgba(255,255,255,.74);border:1px solid var(--line);border-radius:12px;
+  width:max-content;max-width:100%;overflow-x:auto;scrollbar-width:none;
+}
+.subtabs[hidden]{display:none;}
+.subtabs::-webkit-scrollbar{display:none;}
+.subtab{
+  border:0;background:transparent;color:var(--text-2);font-family:inherit;
+  font-size:13px;font-weight:600;padding:7px 15px;border-radius:9px;
+  cursor:pointer;white-space:nowrap;transition:.16s;
+}
+.subtab:hover{color:var(--text);background:rgba(23,32,46,.045);}
+.subtab.active{background:#fff;color:var(--primary-deep);box-shadow:var(--shadow-sm);}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
 
 /* ---------------- 智能教练搭子（主对话页） ---------------- */

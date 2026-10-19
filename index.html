@@ -28,12 +28,9 @@
     <nav class="tabs" id="tabs">
       <button class="tab tab-agent active" data-tab="agent">智能教练搭子</button>
       <button class="tab" data-tab="dash">概览</button>
-      <button class="tab" data-tab="body">身体档案</button>
-      <button class="tab" data-tab="runs">跑步记录</button>
-      <button class="tab" data-tab="goals">目标设定</button>
-      <button class="tab" data-tab="train">训练推荐</button>
-      <button class="tab" data-tab="diet">饮食推荐</button>
-      <button class="tab" data-tab="checkin">每日打卡</button>
+      <button class="tab" data-tab="data">我的数据</button>
+      <button class="tab" data-tab="plan">训练计划</button>
+      <button class="tab" data-tab="diet">饮食</button>
     </nav>
 
     <div class="topbar-right">
@@ -43,6 +40,9 @@
   </header>
 
   <main class="main">
+
+    <!-- 二级页签：只有「我的数据」「训练计划」这类合并页才出现 -->
+    <div class="subtabs" id="subtabs" hidden></div>
 
     <!-- ============ 智能教练搭子（主对话） ============ -->
     <section class="view active" id="view-agent">
@@ -81,6 +81,7 @@
               <button class="ag-tip" data-q="我该怎么练">我该怎么练</button>
               <button class="ag-tip" data-q="今天适合跑步吗">今天适合跑步吗</button>
               <button class="ag-tip" data-q="我的目标还差多少">我的目标还差多少</button>
+              <button class="ag-tip" data-q="最近有什么好看的剧">最近有什么好看的剧</button>
             </div>
           </div>
         </aside>
@@ -102,7 +103,7 @@
           <div class="agent-quick" id="agentQuick"></div>
 
           <form class="agent-input" id="agentForm" autocomplete="off">
-            <input type="text" id="agentInput" placeholder="问他们俩任何跑步的问题，比如「这周跑了多少」" autocomplete="off">
+            <input type="text" id="agentInput" placeholder="问训练也行，随便聊聊也行 —— 比如「这周跑了多少」" autocomplete="off">
             <button type="submit" class="chat-send" id="agentSend" aria-label="发送">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 19V5M5 12l7-7 7 7"/>
@@ -558,7 +559,7 @@
     <div class="chat-log" id="chatLog"></div>
     <div class="chat-quick" id="chatQuick"></div>
     <form class="chat-input" id="chatForm" autocomplete="off">
-      <input type="text" id="chatInput" placeholder="问他们俩任何跑步的问题…" autocomplete="off">
+      <input type="text" id="chatInput" placeholder="问训练也行，随便聊聊也行…" autocomplete="off">
       <button type="submit" class="chat-send" id="chatSend" aria-label="发送">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 19V5M5 12l7-7 7 7"/>
