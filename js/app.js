@@ -158,7 +158,30 @@
     $$('#tabs .tab').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === name); });
     $$('.view').forEach(function (v) { v.classList.toggle('active', v.id === 'view-' + name); });
     Store.setUI('lastTab', name);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // 主对话页是助手"全屏展开"的样子，所以那一页不显示右下角助手，
+    // 切到其它页才把它放出来
+    if (window.Assistant && window.Assistant.onTabChange) window.Assistant.onTabChange(name);
+
+    if (name === 'agent') window.scrollTo({ top: 0 });
+    else window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* 主对话页左侧的"今日速览" */
+  function renderAgentStats() {
+    var box = $('#agentStats');
+    if (!box) return;
+    var w7 = Calc.totalKm(Store.runsSince(7));
+    var streak = Store.currentStreak();
+    var ev = cache.bodyEval;
+    var vol = cache.volume;
+    var score = (ev && Calc.isNum(ev.score)) ? ev.score : '—';
+    var rec = (vol && Calc.isNum(vol.recommend)) ? vol.recommend : '—';
+    box.innerHTML =
+      '<div class="ag-stat"><b>' + w7 + '<small>km</small></b><span>近 7 天</span></div>' +
+      '<div class="ag-stat"><b>' + streak + '<small>天</small></b><span>连续打卡</span></div>' +
+      '<div class="ag-stat"><b>' + score + '<small>分</small></b><span>身体状态</span></div>' +
+      '<div class="ag-stat"><b>' + rec + '<small>km</small></b><span>建议周跑量</span></div>';
   }
 
   /* ================= 概览 ================= */
@@ -682,6 +705,7 @@
     renderTrain();
     renderDiet();
     renderCheckin();
+    renderAgentStats();
   }
 
   /* ================= 事件 ================= */
@@ -1298,13 +1322,10 @@
     fillProfileForm();
 
     // 支持通过链接直接打开某个页面，例如 index.html?tab=train
+    // 没有指定时，默认落在「智能教练搭子」——打开网页先看到对话
     var urlTab = (location.search.match(/[?&]tab=([a-z]+)/) || [])[1];
-    if (urlTab && $('#view-' + urlTab)) {
-      switchTab(urlTab);
-    } else {
-      var last = Store.getUI().lastTab;
-      if (last && $('#view-' + last)) switchTab(last);
-    }
+    if (urlTab && $('#view-' + urlTab)) switchTab(urlTab);
+    else switchTab('agent');
     if (window.Assistant) window.Assistant.init();
   }
 

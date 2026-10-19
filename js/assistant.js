@@ -255,8 +255,18 @@ var Assistant = (function () {
     return !!(p && p.classList.contains('show'));
   }
 
-  function scrollLog() {
-    var el = $('#chatLog');
+  /* 当前在哪个 tab —— 主对话页就是助手的"全屏展开态" */
+  function currentTab() {
+    var v = document.querySelector('.view.active');
+    return v ? v.id.replace(/^view-/, '') : 'dash';
+  }
+  function isAgentView() { return currentTab() === 'agent'; }
+
+  /* 对话内容此刻是否已经"看得见"（小面板打开 或 就在主对话页） */
+  function chatVisible() { return panelOpen() || isAgentView(); }
+
+  function scrollLog(sel) {
+    var el = $(sel);
     if (!el) return;
     // scroll-behavior:smooth 会让赋值变成动画，连续渲染时会停在中间，
     // 这里临时切回 auto，保证每次都真的滚到底
@@ -273,16 +283,18 @@ var Assistant = (function () {
     return '';
   }
 
-  function renderChat() {
-    var el = $('#chatLog');
-    if (!el) return;
-    if (!log.length) {
-      el.innerHTML = '<div class="chat-empty">这里坐着两个人 👇<br>' +
+  function emptyHtml(big) {
+    if (big) {
+      return '<div class="chat-empty">这里坐着两个人 👇<br>' +
         '<b>陈教</b> 负责算你的训练，<b>小跑</b> 负责陪你别放弃。<br>' +
-        '直接打字问就行，比如「这周跑了多少」「我该怎么练」</div>';
-      return;
+        '直接打字问就行，也可以点左边的「可以这样问」。</div>';
     }
-    var html = log.map(function (m) {
+    return '<div class="chat-empty">嗨，我是小跑 👋<br>可以直接打字问我，比如<br>' +
+      '「这周跑了多少」「我该怎么练」</div>';
+  }
+
+  function logHtml() {
+    return log.map(function (m) {
       if (m.role === 'me') {
         return '<div class="chat-row me">' +
           '<div class="chat-avatar">🙂</div>' +
@@ -296,38 +308,57 @@ var Assistant = (function () {
         '<div class="chat-bubble">' + esc(m.text) + '</div>' +
         '<div class="chat-time">' + timeStr(m.ts) + '</div></div></div>';
     }).join('');
-    if (typing) {
-      html += '<div class="chat-row who-coach" id="typingRow">' +
-        '<div class="chat-avatar coach">🧑‍🏫</div>' +
-        '<div class="chat-main"><div class="chat-name coach">两人正在会诊</div>' +
-        '<div class="chat-bubble typing"><i></i><i></i><i></i></div></div></div>';
-    }
-    el.innerHTML = html;
-    scrollLog();
   }
 
-  function renderQuick() {
-    var el = $('#chatQuick');
-    if (!el) return;
+  function typingHtml() {
+    return '<div class="chat-row who-coach typing-row">' +
+      '<div class="chat-avatar coach">🧑‍🏫</div>' +
+      '<div class="chat-main"><div class="chat-name coach">两人正在会诊</div>' +
+      '<div class="chat-bubble typing"><i></i><i></i><i></i></div></div></div>';
+  }
+
+  function renderChat() {
+    [['#chatLog', false], ['#agentLog', true]].forEach(function (pair) {
+      var el = $(pair[0]);
+      if (!el) return;
+      if (!log.length) { el.innerHTML = emptyHtml(pair[1]); return; }
+      el.innerHTML = logHtml() + (typing ? typingHtml() : '');
+    });
+    scrollLog('#chatLog');
+    scrollLog('#agentLog');
+  }
+
+  function quickList() {
     var list = Chat.suggestions().slice(0, 3);
-    if (Agents.getMode() === 'buddy') {
+    var mode = Agents.getMode();
+    if (mode === 'buddy') {
       list = ['我最近有点跑不动', '怎么才能坚持', '今天不想跑怎么办'];
-    } else if (Agents.getMode() === 'coach') {
+    } else if (mode === 'coach') {
       list = Chat.suggestions().slice(0, 4);
     } else {
       list.push('你能做什么');
     }
-    el.innerHTML = list.map(function (q) {
+    return list;
+  }
+
+  function renderQuick() {
+    var html = quickList().map(function (q) {
       return '<button class="chat-chip" data-q="' + esc(q) + '">' + esc(q) + '</button>';
     }).join('');
+    ['#chatQuick', '#agentQuick'].forEach(function (sel) {
+      var el = $(sel);
+      if (el) el.innerHTML = html;
+    });
   }
 
   function renderRoster() {
-    var el = $('#panelRoster');
-    if (!el) return;
     var m = Agents.getMode();
-    [].forEach.call(el.querySelectorAll('.roster-chip'), function (b) {
-      b.classList.toggle('active', b.dataset.mode === m);
+    ['#panelRoster', '#agentRoster'].forEach(function (sel) {
+      var el = $(sel);
+      if (!el) return;
+      [].forEach.call(el.querySelectorAll('.roster-chip'), function (b) {
+        b.classList.toggle('active', b.dataset.mode === m);
+      });
     });
   }
 
@@ -347,10 +378,10 @@ var Assistant = (function () {
     log.push(m);
     if (log.length > CHAT_MAX) log = log.slice(-CHAT_MAX);
     saveChat();
-    if (panelOpen()) renderChat();
+    renderChat();
     if (!noBubble && m.role === 'bot') {
       renderQuick();
-      if (!panelOpen()) showDialog([m]);
+      if (!chatVisible()) showDialog([m]);
     }
   }
 
@@ -382,8 +413,8 @@ var Assistant = (function () {
       if (log.length > CHAT_MAX) log = log.slice(-CHAT_MAX);
     });
     saveChat();
-    if (panelOpen()) renderChat();
-    else showDialog(msgs);
+    renderChat();
+    if (!chatVisible()) showDialog(msgs);
     renderQuick();
   }
 
@@ -446,11 +477,11 @@ var Assistant = (function () {
 
     var more = i < msgs.length - 1;
     typing = more;
-    if (panelOpen()) renderChat();
+    renderChat();
 
     if (!more) {
       renderQuick();
-      if (!panelOpen()) showDialog(msgs);
+      if (!chatVisible()) showDialog(msgs);
     } else {
       setTimeout(function () { reveal(msgs, i + 1); }, 460);
     }
@@ -542,6 +573,21 @@ var Assistant = (function () {
     ];
   }
 
+  /* 切 tab 时的联动：主对话页 === 助手全屏展开，别在右下角再摆一个小助手 */
+  function onTabChange(name) {
+    var box = $('#assistant');
+    if (box) box.classList.toggle('is-hidden', name === 'agent');
+
+    if (name === 'agent') {
+      var p = $('#assistantPanel');
+      if (p) p.classList.remove('show');
+      hideBubble();
+      renderChat();
+      renderQuick();
+      renderRoster();
+    }
+  }
+
   /* ================= 初始化 ================= */
 
   function init() {
@@ -564,6 +610,8 @@ var Assistant = (function () {
     var coachHead = $('#assistantCoachHead');
     var panel = $('#assistantPanel');
 
+    function closePanel() { if (panel) panel.classList.remove('show'); }
+
     function togglePanel() {
       hideBubble();
       var open = panel.classList.toggle('show');
@@ -577,55 +625,82 @@ var Assistant = (function () {
 
     if (body) body.addEventListener('click', togglePanel);
     if (coachHead) coachHead.addEventListener('click', togglePanel);
-    $('#panelClose').addEventListener('click', function () { panel.classList.remove('show'); });
+    $('#panelClose').addEventListener('click', closePanel);
     $('#bubbleClose').addEventListener('click', function (e) { e.stopPropagation(); hideBubble(); });
 
-    document.addEventListener('click', function (e) {
-      if (!e.target.closest('#assistant')) panel.classList.remove('show');
-    });
-
-    $('#chatForm').addEventListener('submit', function (e) {
-      e.preventDefault();
-      var input = $('#chatInput');
-      ask(input.value);
-      input.value = '';
-    });
-
-    $('#chatQuick').addEventListener('click', function (e) {
-      var b = e.target.closest('.chat-chip');
-      if (b) ask(b.dataset.q);
-    });
-
-    var roster = $('#panelRoster');
-    if (roster) {
-      roster.addEventListener('click', function (e) {
-        var b = e.target.closest('.roster-chip');
-        if (!b) return;
-        Agents.setMode(b.dataset.mode);
-        renderRoster();
-        renderQuick();
+    // 小面板里的「回到主对话」：切回智能教练搭子，并收起小面板
+    var toMain = $('#panelToMain');
+    if (toMain) {
+      toMain.addEventListener('click', function (e) {
+        e.stopPropagation();
+        closePanel();
+        hideBubble();
+        if (window.App) window.App.switchTab('agent');
       });
     }
 
-    $('#chatClear').addEventListener('click', function () {
-      log = [];
-      saveChat();
-      renderChat();
-      renderQuick();
-      if (window.toast) window.toast('对话已清空');
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('#assistant')) closePanel();
     });
 
-    // 开场：两人各一句
+    // 两个输入框（大页 / 小面板）走同一条提问链路
+    [['#chatForm', '#chatInput'], ['#agentForm', '#agentInput']].forEach(function (pair) {
+      var form = $(pair[0]);
+      if (!form) return;
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var input = $(pair[1]);
+        if (!input) return;
+        ask(input.value);
+        input.value = '';
+      });
+    });
+
+    // 快捷问题 / 左侧示例问题 / 模式切换 —— 用事件委托，两个容器共用
+    document.addEventListener('click', function (e) {
+      var chip = e.target.closest('.chat-chip');
+      if (chip && chip.dataset.q) { ask(chip.dataset.q); return; }
+
+      var tip = e.target.closest('.ag-tip');
+      if (tip && tip.dataset.q) { ask(tip.dataset.q); return; }
+
+      var rc = e.target.closest('.roster-chip');
+      if (rc && rc.dataset.mode) {
+        Agents.setMode(rc.dataset.mode);
+        renderRoster();
+        renderQuick();
+      }
+    });
+
+    [['#chatClear'], ['#agentClear']].forEach(function (pair) {
+      var btn = $(pair[0]);
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        log = [];
+        saveChat();
+        renderChat();
+        renderQuick();
+        if (window.toast) window.toast('对话已清空');
+      });
+    });
+
+    // 开场：两人各一句（同一天只打一次招呼，避免每次刷新刷屏）
     setTimeout(function () {
+      var today = Store.today();
+      var ui = Store.getUI();
+      if (ui.greetedOn === today) { renderChat(); renderQuick(); return; }
+
       var pair = opening();
       lastText = pair[pair.length - 1].text;
       pair.forEach(function (m) {
         log.push({ role: 'bot', who: m.who, ico: m.ico, name: m.name, text: m.text, ts: Date.now() });
       });
+      if (log.length > CHAT_MAX) log = log.slice(-CHAT_MAX);
       saveChat();
+      Store.setUI('greetedOn', today);
       renderChat();
       renderQuick();
-      if (!panelOpen()) showDialog(pair);
+      if (!chatVisible()) showDialog(pair);
     }, 1300);
 
     fetchWeather(function (w) { weather = w; });
@@ -638,6 +713,9 @@ var Assistant = (function () {
 
     // 数据变了 → 广播 + 作废快照，保证两人看到的是最新数字
     AgentBus.on('data:changed', function () { AgentBus.invalidate(); });
+
+    // 初始化时按当前 tab 摆好助手的位置：主对话页就藏起悬浮助手
+    onTabChange(currentTab());
 
     scheduleNext(true);
   }
@@ -653,6 +731,8 @@ var Assistant = (function () {
     broadcast: broadcast,
     ask: ask,
     show: say,
+    onTabChange: onTabChange,
+    isAgentView: isAgentView,
     _fetchWeather: fetchWeather,
     _weatherAdvice: weatherAdvice,
     _weatherLine: weatherLine,
@@ -660,7 +740,9 @@ var Assistant = (function () {
     _log: function () { return log; },
     _renderChat: renderChat,
     _opening: opening,
-    _reveal: reveal
+    _reveal: reveal,
+    _currentTab: currentTab,
+    _chatVisible: chatVisible
   };
 })();
 

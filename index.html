@@ -26,7 +26,8 @@
     </div>
 
     <nav class="tabs" id="tabs">
-      <button class="tab active" data-tab="dash">概览</button>
+      <button class="tab tab-agent active" data-tab="agent">智能教练搭子</button>
+      <button class="tab" data-tab="dash">概览</button>
       <button class="tab" data-tab="body">身体档案</button>
       <button class="tab" data-tab="runs">跑步记录</button>
       <button class="tab" data-tab="goals">目标设定</button>
@@ -43,8 +44,78 @@
 
   <main class="main">
 
+    <!-- ============ 智能教练搭子（主对话） ============ -->
+    <section class="view active" id="view-agent">
+      <div class="agent-shell">
+
+        <aside class="agent-side">
+          <div class="agent-card">
+            <div class="ag-title">今天陪你的是</div>
+            <div class="ag-person coach">
+              <div class="ag-ava">🧑‍🏫</div>
+              <div class="ag-meta">
+                <b>陈教 · 主教练</b>
+                <span>看数据、下判断、给方案</span>
+              </div>
+              <i class="ag-dot"></i>
+            </div>
+            <div class="ag-person buddy">
+              <div class="ag-ava buddy">🐣</div>
+              <div class="ag-meta">
+                <b>小跑 · 陪跑搭子</b>
+                <span>接情绪、盯执行、陪你出门</span>
+              </div>
+              <i class="ag-dot"></i>
+            </div>
+          </div>
+
+          <div class="agent-card">
+            <div class="ag-title">今日速览</div>
+            <div class="ag-stats" id="agentStats"></div>
+          </div>
+
+          <div class="agent-card ag-tips-card">
+            <div class="ag-title">可以这样问</div>
+            <div class="ag-tips" id="agentTips">
+              <button class="ag-tip" data-q="这周跑了多少">这周跑了多少</button>
+              <button class="ag-tip" data-q="我该怎么练">我该怎么练</button>
+              <button class="ag-tip" data-q="今天适合跑步吗">今天适合跑步吗</button>
+              <button class="ag-tip" data-q="我的目标还差多少">我的目标还差多少</button>
+            </div>
+          </div>
+        </aside>
+
+        <div class="agent-chat">
+          <div class="agent-head">
+            <div class="panel-roster" id="agentRoster">
+              <button class="roster-chip active" data-mode="consult" title="两个人一起回答">会诊</button>
+              <button class="roster-chip" data-mode="coach" title="只问陈教"><i>🧑‍🏫</i>陈教</button>
+              <button class="roster-chip" data-mode="buddy" title="只问小跑"><i>🐣</i>小跑</button>
+            </div>
+            <div class="agent-head-right">
+              <span class="agent-status" id="agentStatus">两位都在线</span>
+              <button class="panel-icon-btn" id="agentClear" title="清空对话">🗑</button>
+            </div>
+          </div>
+
+          <div class="agent-log" id="agentLog"></div>
+          <div class="agent-quick" id="agentQuick"></div>
+
+          <form class="agent-input" id="agentForm" autocomplete="off">
+            <input type="text" id="agentInput" placeholder="问他们俩任何跑步的问题，比如「这周跑了多少」" autocomplete="off">
+            <button type="submit" class="chat-send" id="agentSend" aria-label="发送">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 19V5M5 12l7-7 7 7"/>
+              </svg>
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </section>
+
     <!-- ============ 概览 ============ -->
-    <section class="view active" id="view-dash">
+    <section class="view" id="view-dash">
       <div id="demoBanner"></div>
       <div class="hero">
         <div class="hero-left">
@@ -479,6 +550,7 @@
         <button class="roster-chip" data-mode="buddy" title="只问小跑"><i>🐣</i>小跑</button>
       </div>
       <div class="panel-head-actions">
+        <button class="panel-main-btn" id="panelToMain" title="回到主对话">⤢ 主对话</button>
         <button class="panel-icon-btn" id="chatClear" title="清空对话">🗑</button>
         <button class="panel-close" id="panelClose">×</button>
       </div>
