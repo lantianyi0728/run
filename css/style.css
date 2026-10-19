@@ -371,10 +371,20 @@ a{color:inherit;}
   text-align:center;font-size:11.5px;color:var(--muted);padding:26px 0 6px;
 }
 
-/* ---------------- 悬浮小助手 ---------------- */
+/* ---------------- 悬浮双人搭档 ---------------- */
 .assistant{position:fixed;right:24px;bottom:24px;z-index:200;display:flex;flex-direction:column;align-items:flex-end;gap:10px;}
+.assistant-duo{position:relative;display:flex;align-items:flex-end;}
+.assistant-head{
+  width:52px;height:52px;border-radius:50%;border:0;padding:0;cursor:pointer;flex:none;
+  margin-right:-10px;margin-bottom:22px;z-index:2;
+  background:linear-gradient(150deg,#e6f0ff,#fff);
+  box-shadow:0 10px 22px -12px rgba(58,110,200,.85), 0 3px 9px rgba(23,32,46,.10);
+  transition:transform .22s cubic-bezier(.34,1.56,.64,1);
+  animation:floaty 4.4s ease-in-out infinite .4s;
+}
+.assistant-head:hover{transform:scale(1.12) translateY(-2px);}
 .assistant-body{
-  position:relative;width:80px;height:80px;border-radius:50%;border:0;padding:0;cursor:pointer;
+  position:relative;width:80px;height:80px;border-radius:50%;border:0;padding:0;cursor:pointer;flex:none;
   background:linear-gradient(150deg,#ffd9c7,#fff);box-shadow:0 14px 30px -12px rgba(255,106,61,.7), 0 4px 12px rgba(23,32,46,.1);
   transition:transform .22s cubic-bezier(.34,1.56,.64,1);
   animation:floaty 3.6s ease-in-out infinite;
@@ -389,14 +399,20 @@ a{color:inherit;}
 .assistant-svg{width:100%;height:100%;display:block;border-radius:50%;}
 
 .assistant-bubble{
-  max-width:276px;background:var(--surface);border-radius:16px 16px 4px 16px;
+  max-width:308px;background:var(--surface);border-radius:16px 16px 4px 16px;
   padding:11px 30px 11px 14px;box-shadow:var(--shadow-lg);border:1px solid var(--line);
   position:relative;opacity:0;transform:translateY(8px) scale(.94);pointer-events:none;
   transition:.28s cubic-bezier(.34,1.4,.64,1);
 }
 .assistant-bubble.show{opacity:1;transform:none;pointer-events:auto;}
-.bubble-text{font-size:12.8px;line-height:1.65;color:var(--text-2);}
+.bubble-text{font-size:12.8px;line-height:1.65;color:var(--text-2);display:flex;flex-direction:column;gap:8px;}
 .bubble-text b{color:var(--text);}
+.bub-line{display:block;padding-left:8px;border-left:2.5px solid #e7edf5;}
+.bub-line.coach{border-left-color:#9dbdf0;}
+.bub-line.buddy{border-left-color:#ffbfa3;}
+.bub-who{display:block;font-size:10.5px;font-weight:700;letter-spacing:.3px;margin-bottom:2px;}
+.bub-line.coach .bub-who{color:#3f6fd8;}
+.bub-line.buddy .bub-who{color:#e2643a;}
 .bubble-close{
   position:absolute;top:5px;right:6px;border:0;background:transparent;color:#b9c4d3;
   font-size:15px;line-height:1;cursor:pointer;padding:2px 4px;
@@ -404,16 +420,30 @@ a{color:inherit;}
 .bubble-close:hover{color:var(--text-2);}
 
 .assistant-panel{
-  position:absolute;right:0;bottom:96px;width:344px;background:var(--surface);
+  position:absolute;right:0;bottom:100px;width:362px;background:var(--surface);
   border-radius:var(--r);box-shadow:var(--shadow-lg);border:1px solid var(--line);
   overflow:hidden;opacity:0;transform:translateY(10px) scale(.96);pointer-events:none;transition:.24s;
   display:flex;flex-direction:column;
 }
 .assistant-panel.show{opacity:1;transform:none;pointer-events:auto;}
-.panel-head{display:flex;align-items:center;justify-content:space-between;padding:11px 12px 11px 14px;
-  background:linear-gradient(120deg,#fff2ec,#eef7ff);border-bottom:1px solid var(--line);flex:none;}
+.panel-head{display:flex;align-items:center;justify-content:space-between;padding:9px 10px 9px 11px;
+  background:linear-gradient(120deg,#fff2ec,#eef7ff);border-bottom:1px solid var(--line);flex:none;gap:6px;}
 .panel-title{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:7px;}
 .panel-dot{width:8px;height:8px;border-radius:50%;background:#22b573;box-shadow:0 0 0 3px rgba(34,181,115,.18);}
+
+/* 三个模式切换：会诊 / 只问陈教 / 只问小跑 */
+.panel-roster{display:flex;gap:2px;background:rgba(255,255,255,.7);padding:3px;border-radius:11px;border:1px solid rgba(23,32,46,.06);}
+.roster-chip{
+  border:0;background:transparent;font-size:11.5px;font-family:inherit;font-weight:600;
+  color:var(--muted);padding:5px 9px;border-radius:8px;cursor:pointer;transition:.16s;
+  display:flex;align-items:center;gap:3px;white-space:nowrap;
+}
+.roster-chip i{font-style:normal;font-size:11px;line-height:1;}
+.roster-chip:hover{color:var(--text-2);background:rgba(23,32,46,.04);}
+.roster-chip.active{background:#fff;color:var(--text);box-shadow:0 1px 4px rgba(23,32,46,.13);}
+.roster-chip.active[data-mode="coach"]{color:#2f57ad;}
+.roster-chip.active[data-mode="buddy"]{color:#d9572e;}
+
 .panel-head-actions{display:flex;align-items:center;gap:2px;}
 .panel-icon-btn{border:0;background:transparent;font-size:13px;cursor:pointer;line-height:1;
   padding:4px 6px;border-radius:7px;color:var(--muted);}
@@ -423,22 +453,31 @@ a{color:inherit;}
 
 /* ---- 聊天区 ---- */
 .chat-log{
-  padding:13px 13px 6px;height:308px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;
+  padding:13px 13px 6px;height:352px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;
   background:linear-gradient(180deg,#fbfdff,#fff);scroll-behavior:smooth;
 }
 .chat-row{display:flex;gap:8px;align-items:flex-start;max-width:100%;animation:chatIn .26s ease;}
 @keyframes chatIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
 .chat-row.me{flex-direction:row-reverse;}
+.chat-main{display:flex;flex-direction:column;min-width:0;}
+.chat-row.me .chat-main{align-items:flex-end;}
 .chat-avatar{
   width:26px;height:26px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:13px;
   background:linear-gradient(150deg,#ffe3d3,#fff);border:1px solid #ffdcc8;
 }
+.chat-avatar.coach{background:linear-gradient(150deg,#dce8fb,#fff);border-color:#c3d6f2;}
+.chat-avatar.buddy{background:linear-gradient(150deg,#ffe3d3,#fff);border-color:#ffdcc8;}
 .chat-row.me .chat-avatar{background:#eef2f7;border-color:var(--line);}
+.chat-name{font-size:10px;font-weight:700;color:var(--muted);margin:0 0 3px 2px;letter-spacing:.2px;}
+.chat-name.coach{color:#3f6fd8;}
+.chat-name.buddy{color:#e2643a;}
 .chat-bubble{
-  max-width:236px;padding:9px 12px;border-radius:13px;font-size:12.8px;line-height:1.68;
+  max-width:246px;padding:9px 12px;border-radius:13px;font-size:12.8px;line-height:1.68;
   color:var(--text-2);background:var(--surface-2);border:1px solid var(--line);
   border-top-left-radius:4px;white-space:pre-wrap;word-break:break-word;
 }
+.chat-row.who-coach .chat-bubble{background:#f7faff;border-color:#e2ecfa;}
+.chat-row.who-buddy .chat-bubble{background:var(--surface-2);border-color:var(--line);}
 .chat-row.me .chat-bubble{
   background:linear-gradient(135deg,#ff6a3d,#ff8a5c);color:#fff;border-color:transparent;
   border-top-left-radius:13px;border-top-right-radius:4px;
@@ -564,9 +603,11 @@ a{color:inherit;}
   .brand-text p{display:none;}
   .assistant{right:14px;bottom:14px;}
   .assistant-body{width:68px;height:68px;}
+  .assistant-head{width:44px;height:44px;margin-bottom:18px;}
   .assistant-panel{width:calc(100vw - 28px);}
-  .assistant-bubble{max-width:232px;}
+  .assistant-bubble{max-width:250px;}
   .chat-log{height:250px;}
   .chat-bubble{max-width:200px;}
+  .roster-chip{padding:5px 7px;font-size:11px;}
   .cal-day{min-height:58px;padding:5px 6px;}
 }

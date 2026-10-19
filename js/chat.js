@@ -422,7 +422,7 @@ var Chat = (function () {
   // 这里统一兼容，避免漏答。
   function ask(question, cb) {
     var q = plain(question);
-    if (!q) { cb({ ico: '💬', text: '想问我什么？' }); return; }
+    if (!q) { cb({ ico: '💬', text: '想问我什么？', intent: 'fallback' }); return; }
     var id = matchIntent(q) || 'fallback';
     var c = context();
     var fn = H[id] || H.fallback;
@@ -430,7 +430,11 @@ var Chat = (function () {
     var respond = function (res) {
       if (done) return;
       done = true;
-      cb(res || { ico: '💬', text: '我没想好怎么回答，换个说法试试？' });
+      if (!res || typeof res.text !== 'string') {
+        res = { ico: '💬', text: '我没想好怎么回答，换个说法试试？' };
+      }
+      res.intent = id;             // 让双智能体知道这句话属于哪一类
+      cb(res);
     };
     var ret = fn(c, respond);
     if (ret && typeof ret === 'object' && typeof ret.text === 'string') respond(ret);

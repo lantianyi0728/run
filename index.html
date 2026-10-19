@@ -212,7 +212,7 @@
           <span class="form-msg" id="dataMsg"></span>
         </div>
         <div class="uploader-tip" style="margin-top:12px">
-          数据保存在浏览器的 localStorage 中，不会上传到任何服务器。换电脑、换浏览器或清理浏览器数据后会丢失，重要数据建议定期导出备份。
+          数据保存在浏览器的 localStorage 中。换电脑、换浏览器或清理浏览器数据后会丢失，重要数据建议定期导出备份。唯一会离开本机的是：你向两位智能体提问时，系统把已算好的统计摘要（跑量、配速、评分等，不含姓名）发给云端语言模型来组织措辞。
         </div>
       </div>
     </section>
@@ -449,24 +449,33 @@
   </main>
 
   <footer class="footer">
-    跑者搭档 RunMate · 全部数据保存在你的浏览器本地，不会上传任何服务器
+    跑者搭档 RunMate · 跑步记录只存在你的浏览器本地；提问时仅把「算好的统计摘要」（不含姓名）交给云端模型组织语言
   </footer>
 </div>
 
-<!-- ============ 悬浮智能小助手 ============ -->
+<!-- ============ 悬浮双人搭档：陈教 + 小跑 ============ -->
 <div class="assistant" id="assistant">
   <div class="assistant-bubble" id="assistantBubble">
     <div class="bubble-text" id="bubbleText"></div>
     <button class="bubble-close" id="bubbleClose" aria-label="关闭">×</button>
   </div>
-  <button class="assistant-body" id="assistantBody" aria-label="智能小助手">
-    <span class="assistant-ring"></span>
-    <svg viewBox="0 0 120 120" class="assistant-svg" id="assistantSvg"></svg>
-  </button>
+
+  <div class="assistant-duo">
+    <button class="assistant-head" id="assistantCoachHead" aria-label="主教练 陈教" title="陈教 · 主教练">
+      <svg viewBox="0 0 120 120" class="assistant-svg" id="coachSvg"></svg>
+    </button>
+    <button class="assistant-body" id="assistantBody" aria-label="陪跑搭子 小跑" title="小跑 · 陪跑搭子">
+      <span class="assistant-ring"></span>
+      <svg viewBox="0 0 120 120" class="assistant-svg" id="assistantSvg"></svg>
+    </button>
+  </div>
+
   <div class="assistant-panel" id="assistantPanel">
     <div class="panel-head">
-      <div class="panel-title">
-        <span class="panel-dot"></span>搭档 · 小跑
+      <div class="panel-roster" id="panelRoster">
+        <button class="roster-chip active" data-mode="consult" title="两个人一起回答">会诊</button>
+        <button class="roster-chip" data-mode="coach" title="只问陈教"><i>🧑‍🏫</i>陈教</button>
+        <button class="roster-chip" data-mode="buddy" title="只问小跑"><i>🐣</i>小跑</button>
       </div>
       <div class="panel-head-actions">
         <button class="panel-icon-btn" id="chatClear" title="清空对话">🗑</button>
@@ -476,7 +485,7 @@
     <div class="chat-log" id="chatLog"></div>
     <div class="chat-quick" id="chatQuick"></div>
     <form class="chat-input" id="chatForm" autocomplete="off">
-      <input type="text" id="chatInput" placeholder="问我任何跑步的问题…" autocomplete="off">
+      <input type="text" id="chatInput" placeholder="问他们俩任何跑步的问题…" autocomplete="off">
       <button type="submit" class="chat-send" id="chatSend" aria-label="发送">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 19V5M5 12l7-7 7 7"/>
@@ -493,6 +502,9 @@
 <script src="js/coach.js"></script>
 <script src="js/chat.js"></script>
 <script src="js/importer.js"></script>
+<script src="js/llm.js"></script>
+<script src="js/agentbus.js"></script>
+<script src="js/agents.js"></script>
 <script src="js/assistant.js"></script>
 <script src="js/app.js"></script>
 </body>

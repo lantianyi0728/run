@@ -1,28 +1,29 @@
 /* ============================================================
-   assistant.js — 悬浮智能小助手「小跑」
+   assistant.js — 悬浮的"双人搭档"：陈教 + 小跑
+   ------------------------------------------------------------
    行为：
-   · 每次打开网页 → 打招呼
-   · 每 3-4 分钟（随机）弹一条短消息：天气 / 激励 / 训练小贴士 / 打卡提醒
-   · 记录跑步、完成打卡、保存目标后 → 立即给一次针对性反馈
-   · 点击助手 → 打开聊天面板，可以**直接打字提问**（由 chat.js 基于你自己的数据回答）
-   · 页面切到后台时暂停，回到前台重新计时，避免消息堆积
+   · 打开网页 → 两人各说一句，把分工交代清楚（不是一个人自说自话）
+   · 你提问 → 会诊：陈教先给判断，小跑接着补人话（顺序按话题自动切换）
+   · 你记录跑步 / 打卡 / 改目标 → 陈教在后台静默分析，
+     值得说的才让小跑转述，避免两个人轮流骚扰你
+   · 每 3-4 分钟偶尔来一段两人的短对话（有话才说，不硬凑）
+   · 面板顶部可以切「会诊 / 只问陈教 / 只问小跑」
    ============================================================ */
 
 var Assistant = (function () {
 
-  var NAME = '小跑';
-  var TICK_MIN = 180000;   // 3 分钟
-  var TICK_MAX = 240000;   // 4 分钟
-  var FIRST_DELAY_MIN = 60000;
-  var FIRST_DELAY_MAX = 90000;
+  var TICK_MIN = 200000;
+  var TICK_MAX = 260000;
+  var FIRST_DELAY_MIN = 70000;
+  var FIRST_DELAY_MAX = 100000;
   var HIDE_MIN = 7000;
-  var HIDE_MAX = 14000;
+  var HIDE_MAX = 15000;
   var CHAT_MAX = 60;
 
   var timer = null, hideTimer = null, started = false, typing = false;
   var lastText = '';
   var weather = null;
-  var log = [];            // [{role:'bot'|'me', ico, text, ts}]
+  var log = [];            // [{role:'bot'|'me', who, ico, name, text, ts}]
 
   function $(s) { return document.querySelector(s); }
   function esc(s) {
@@ -32,8 +33,10 @@ var Assistant = (function () {
     var d = new Date(ts);
     return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
   }
+  function rand(a, b) { return a + Math.floor(Math.random() * (b - a)); }
 
-  /* ---------------- Q 版助手图形 ---------------- */
+  /* ================= Q 版角色 ================= */
+
   function svgMarkup() {
     return ''
       + '<defs>'
@@ -71,7 +74,45 @@ var Assistant = (function () {
       + '<path d="M97 68 q4 5 0 8.4 a4 4 0 1 1 -4.6 -8.4 z" fill="#7fd4ff" opacity=".9"/>';
   }
 
-  /* ---------------- 天气 ---------------- */
+  function coachSvgMarkup() {
+    return ''
+      + '<defs>'
+      + '<radialGradient id="acBody" cx="36%" cy="26%" r="82%">'
+      + '<stop offset="0%" stop-color="#f6faff"/>'
+      + '<stop offset="52%" stop-color="#dbe8fb"/>'
+      + '<stop offset="100%" stop-color="#a3c0e9"/>'
+      + '</radialGradient>'
+      + '<linearGradient id="acCap" x1="0" y1="0" x2="1" y2="1">'
+      + '<stop offset="0%" stop-color="#5b8ce0"/><stop offset="100%" stop-color="#2d54a8"/>'
+      + '</linearGradient>'
+      + '<radialGradient id="acShine" cx="50%" cy="50%" r="50%">'
+      + '<stop offset="0%" stop-color="#ffffff" stop-opacity=".9"/>'
+      + '<stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>'
+      + '</radialGradient>'
+      + '</defs>'
+      + '<circle cx="60" cy="60" r="58" fill="url(#acBody)"/>'
+      + '<ellipse cx="42" cy="32" rx="19" ry="13" fill="url(#acShine)"/>'
+      + '<path d="M17 45 Q25 11 60 11 Q95 11 103 45 Q60 33 17 45 Z" fill="url(#acCap)"/>'
+      + '<path d="M17 45 Q60 33 103 45 Q60 53 17 45 Z" fill="#26427c" opacity=".5"/>'
+      + '<circle cx="60" cy="13.5" r="3.2" fill="#93b7ec"/>'
+      + '<g fill="none" stroke="#2b3445" stroke-width="2.5">'
+      + '<rect x="32" y="53" width="25" height="20" rx="8"/>'
+      + '<rect x="63" y="53" width="25" height="20" rx="8"/>'
+      + '<path d="M57 61.5 h6"/>'
+      + '</g>'
+      + '<ellipse cx="44.5" cy="63" rx="4.4" ry="5.4" fill="#2b3445"/>'
+      + '<ellipse cx="75.5" cy="63" rx="4.4" ry="5.4" fill="#2b3445"/>'
+      + '<circle cx="43" cy="61.2" r="1.6" fill="#fff"/>'
+      + '<circle cx="74" cy="61.2" r="1.6" fill="#fff"/>'
+      + '<path d="M51 85 h18" stroke="#2b3445" stroke-width="2.8" stroke-linecap="round"/>'
+      + '<g transform="translate(94,70)">'
+      + '<rect x="0" y="0" width="12" height="9" rx="3.5" fill="#ffb340"/>'
+      + '<circle cx="4" cy="4.5" r="1.7" fill="#8a5a00"/>'
+      + '</g>';
+  }
+
+  /* ================= 天气 ================= */
+
   var WMO = {
     0: ['晴', '☀️'], 1: ['晴间多云', '🌤️'], 2: ['多云', '⛅'], 3: ['阴', '☁️'],
     45: ['有雾', '🌫️'], 48: ['雾凇', '🌫️'],
@@ -85,7 +126,6 @@ var Assistant = (function () {
     95: ['雷阵雨', '⛈️'], 96: ['雷阵雨伴冰雹', '⛈️'], 99: ['强雷暴冰雹', '⛈️']
   };
   function wmoText(code) { return (WMO[code] || ['未知', '🌡️']); }
-
   function canFetch() { return typeof fetch === 'function'; }
 
   function getLocation(cb) {
@@ -105,25 +145,18 @@ var Assistant = (function () {
       cb(loc);
     };
     var fallback = { lat: 22.5176, lon: 113.3928, city: '中山' };
-
     if (!canFetch()) { finish(fallback); return; }
 
     var timeout = setTimeout(function () { finish(fallback); }, 5000);
-
     fetch('https://ipwho.is/')
       .then(function (r) { return r.json(); })
       .then(function (d) {
         clearTimeout(timeout);
         if (d && d.success !== false && d.latitude) {
           finish({ lat: d.latitude, lon: d.longitude, city: d.city || d.region || '当前位置' });
-        } else {
-          throw new Error('bad');
-        }
+        } else { throw new Error('bad'); }
       })
-      .catch(function () {
-        clearTimeout(timeout);
-        finish(fallback);
-      });
+      .catch(function () { clearTimeout(timeout); finish(fallback); });
   }
 
   function fetchWeather(cb) {
@@ -175,97 +208,13 @@ var Assistant = (function () {
     return '适合跑步的天气，出门前记得热身 8 分钟。';
   }
 
-  /* ---------------- 主动消息内容 ---------------- */
-  function greeting() {
-    var p = Store.getProfile();
-    var h = new Date().getHours();
-    var when = h < 5 ? '这么晚还没睡呀' : h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : h < 23 ? '晚上好' : '夜深了';
-    var name = p.name || '跑者';
-    var today = Store.today();
-    var runs = Store.runsOn(today);
-    var tail;
-    if (runs.length) {
-      tail = '今天已经跑了 ' + Calc.totalKm(runs) + ' km 啦，很棒！';
-    } else if (Store.isChecked(today)) {
-      tail = '今天打过卡了 ✅ 有跑步的话记得补一条记录。';
-    } else {
-      var streak = Store.currentStreak();
-      tail = streak >= 3
-        ? '你已经连续打卡 ' + streak + ' 天，今天也别忘了哦 🔥'
-        : '今天还没打卡，等会儿一起动起来吧 🏃';
-    }
-    return { ico: '👋', text: when + '，' + name + '！我是' + NAME + '，你的跑步搭档。' + tail + ' 点我就能直接问我问题。' };
-  }
-
-  function runFeedback(run) {
-    var pace = run.seconds / run.distance;
-    var km = run.distance;
-    var parts = [];
-    parts.push('收到！' + km + ' km / ' + Calc.fmtDur(run.seconds) + '，配速 ' + Calc.fmtPaceUnit(pace) + '。');
-
-    var all = Store.getRuns().filter(function (r) { return r.id !== run.id; });
-    var sameType = all.filter(function (r) { return r.type === run.type; });
-    var base = sameType.length >= 2 ? Calc.avgPaceOf(sameType) : Calc.avgPaceOf(all);
-    if (base) {
-      var diff = pace - base;
-      if (diff <= -6) parts.push('比同类跑步的平均配速快了 ' + Math.abs(Math.round(diff)) + ' 秒，状态在往好的方向走 💪');
-      else if (diff >= 6) parts.push('比平均水平慢了 ' + Math.round(diff) + ' 秒。如果是刻意放松跑那没问题；想跑快却没跑动，注意休息和补给。');
-      else parts.push('和你的平均水平基本持平，很稳。');
-    }
-
-    var total = Calc.totalKm(Store.getRuns());
-    if (total >= 100 && total - km < 100) parts.push('恭喜！累计跑量突破 100 km 了 🎉');
-    else if (total >= 50 && total - km < 50) parts.push('累计跑量到 50 km 啦，继续加油！');
-    else if (total >= 10 && total - km < 10) parts.push('累计跑量破 10 km，开个好头 ✨');
-
-    if (km >= 15) parts.push('长距离跑完记得补充蛋白质和碳水，今晚早点睡。');
-    else if (run.rpe >= 8) parts.push('这次体感强度挺高，明天安排轻松跑或休息，别连着拼。');
-    else if (run.rpe <= 3 && run.type === 'easy') parts.push('轻松跑就该这么跑，能聊天就对了 👌');
-
-    if (run.hr) {
-      var mhr = Calc.maxHR(Store.getProfile().age);
-      if (mhr) {
-        var pct = run.hr / mhr;
-        if (pct > 0.9 && run.type === 'easy') parts.push('轻松跑的平均心率到最大心率的 ' + Math.round(pct * 100) + '% 了，说明跑快了，下次再慢一点。');
-      }
-    }
-    return { ico: '🏃', text: parts.join(' ') };
-  }
-
-  function checkinFeedback(streak) {
-    var t;
-    if (streak >= 30) t = '连续打卡 ' + streak + ' 天！！这已经是生活方式了，不是坚持 🙌';
-    else if (streak >= 14) t = '连续打卡两周，' + streak + ' 天！这种稳定是进步最快的秘诀。';
-    else if (streak >= 7) t = '连续打卡一周啦（' + streak + ' 天），身体已经开始记住这个节奏了 ⭐';
-    else if (streak >= 3) t = '连续 ' + streak + ' 天打卡，很好，保持住 🔥';
-    else t = '打卡成功 ✅ 第一步永远是最难的，你已经迈出去了。';
-    return { ico: '✅', text: t };
-  }
-
-  function goalFeedback() {
-    var goals = Store.getGoals();
-    if (!goals.length) return null;
-    var g = goals[goals.length - 1];
-    var pace = g.targetSeconds / g.distanceKm;
-    var pred = Calc.racePredict(Store.getRuns());
-    var txt = '目标记下了：' + g.label + ' 跑进 ' + Calc.fmtDur(g.targetSeconds) + '，也就是 ' + Calc.fmtPaceUnit(pace) + '。';
-    if (pred['10k']) {
-      var cur = pred[g.type] ? pred[g.type].seconds : Calc.riegel(pred['10k'].seconds, 10, g.distanceKm);
-      if (cur) {
-        var gap = cur - g.targetSeconds;
-        txt += gap <= 0 ? '按你现在的水平其实已经能跑到了，可以考虑再加点难度 😏'
-          : '按当前预测你还差 ' + Calc.fmtDur(gap) + '，我把课表按这个目标重新排了一版，去「训练推荐」看看。';
-      }
-    } else {
-      txt += '多记几次跑步，我就能算出你离目标还有多远。';
-    }
-    return { ico: '🎯', text: txt };
-  }
+  /* ================= 主动消息池 ================= */
 
   function dynamicMessages() {
     var pool = [];
     var today = Store.today();
     var runs = Store.getRuns();
+    var d = AgentBus.data();
 
     if (weather) pool.push({ ico: weather.emoji, text: weatherLine(weather) + weatherAdvice(weather) });
 
@@ -274,32 +223,33 @@ var Assistant = (function () {
     }
 
     if (runs.length) {
-      var last = runs[0];
-      var gapDays = Store.daysBetween(last.date, today);
-      if (gapDays >= 4) pool.push({ ico: '🐢', text: '已经 ' + gapDays + ' 天没跑步记录了，状态是会掉的。今天先从 20 分钟轻松跑开始找找感觉？' });
-      else if (gapDays <= 1) pool.push({ ico: '📈', text: '最近一次是 ' + last.date + ' 的 ' + last.distance + ' km，节奏保持得不错。' });
+      if (d.gapDays >= 4) {
+        pool.push({ ico: '🐢', text: '已经 ' + d.gapDays + ' 天没跑步记录了，状态是会掉的。今天先从 20 分钟轻松跑开始找找感觉？' });
+      } else if (d.gapDays <= 1) {
+        pool.push({ ico: '📈', text: '最近一次是 ' + d.lastRun.date + ' 的 ' + d.lastRun.distance + ' km，节奏保持得不错。' });
+      }
     } else {
       pool.push({ ico: '🚶', text: '还没有跑步记录呢。第一次不用多，20 分钟慢跑就足够开启这一切了。' });
     }
 
-    var ev = Calc.evaluateBody(Store.getProfile(), runs, Store.getCheckins());
-    if (ev.metrics && Calc.isNum(ev.metrics.weeklyAvgKm) && ev.metrics.weeklyAvgKm > 0 && ev.metrics.weeklyAvgKm < 10) {
-      pool.push({ ico: '📊', text: '目前周均 ' + ev.metrics.weeklyAvgKm + ' km，先别管配速，把跑量稳稳提到 15 km 会更有效。' });
+    if (d.volume.recommend > d.volume.current && d.volume.current > 0) {
+      pool.push({ ico: '📊', text: '目前周均 ' + d.volume.current + ' km，目标区间是 ' + d.volume.recommend + ' km，慢慢往上加就行，别急。' });
     }
 
-    var tips = Coach.tips(Store.getProfile(), ev, runs);
-    var dayIdx = (new Date().getDate() + new Date().getHours()) % tips.length;
-    pool.push({ ico: '💡', text: tips[dayIdx] });
-    pool.push({ ico: '💡', text: tips[(dayIdx + 5) % tips.length] });
+    var tips = Coach.tips(Store.getProfile(), Calc.evaluateBody(Store.getProfile(), runs, Store.getCheckins()), runs);
+    var idx = (new Date().getDate() + new Date().getHours()) % tips.length;
+    pool.push({ ico: '💡', text: tips[idx] });
+    pool.push({ ico: '💡', text: tips[(idx + 5) % tips.length] });
 
     var enc = Coach.encouragements();
     pool.push({ ico: '✨', text: enc[(new Date().getMinutes() + new Date().getDate()) % enc.length] });
-    pool.push({ ico: '💬', text: '有问题随时问我，比如「我该怎么练」「今天适合跑步吗」。' });
+    pool.push({ ico: '💬', text: '有问题随时问我们俩，比如「我该怎么练」「今天适合跑步吗」。' });
 
     return pool;
   }
 
-  /* ---------------- 聊天气泡渲染 ---------------- */
+  /* ================= 渲染 ================= */
+
   function panelOpen() {
     var p = $('#assistantPanel');
     return !!(p && p.classList.contains('show'));
@@ -307,32 +257,50 @@ var Assistant = (function () {
 
   function scrollLog() {
     var el = $('#chatLog');
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    // scroll-behavior:smooth 会让赋值变成动画，连续渲染时会停在中间，
+    // 这里临时切回 auto，保证每次都真的滚到底
+    var prev = el.style.scrollBehavior;
+    el.style.scrollBehavior = 'auto';
+    el.scrollTop = el.scrollHeight;
+    el.style.scrollBehavior = prev;
+  }
+
+  function whoClass(who) { return who === 'buddy' ? 'who-buddy' : 'who-coach'; }
+  function whoName(who) {
+    if (who === 'buddy') return '小跑 · 搭子';
+    if (who === 'coach') return '陈教 · 教练';
+    return '';
   }
 
   function renderChat() {
     var el = $('#chatLog');
     if (!el) return;
     if (!log.length) {
-      el.innerHTML = '<div class="chat-empty">嗨，我是小跑 👋<br>可以直接打字问我，比如<br>「这周跑了多少」「我该怎么练」</div>';
+      el.innerHTML = '<div class="chat-empty">这里坐着两个人 👇<br>' +
+        '<b>陈教</b> 负责算你的训练，<b>小跑</b> 负责陪你别放弃。<br>' +
+        '直接打字问就行，比如「这周跑了多少」「我该怎么练」</div>';
       return;
     }
     var html = log.map(function (m) {
       if (m.role === 'me') {
         return '<div class="chat-row me">' +
           '<div class="chat-avatar">🙂</div>' +
-          '<div><div class="chat-bubble">' + esc(m.text) + '</div>' +
+          '<div class="chat-main"><div class="chat-bubble">' + esc(m.text) + '</div>' +
           '<div class="chat-time" style="text-align:right">' + timeStr(m.ts) + '</div></div></div>';
       }
-      return '<div class="chat-row">' +
-        '<div class="chat-avatar">' + (m.ico || '💬') + '</div>' +
-        '<div><div class="chat-bubble">' + esc(m.text) + '</div>' +
+      var who = m.who === 'buddy' ? 'buddy' : 'coach';
+      return '<div class="chat-row ' + whoClass(who) + '">' +
+        '<div class="chat-avatar ' + who + '">' + (m.ico || '💬') + '</div>' +
+        '<div class="chat-main"><div class="chat-name ' + who + '">' + (m.name ? esc(m.name) : whoName(who)) + '</div>' +
+        '<div class="chat-bubble">' + esc(m.text) + '</div>' +
         '<div class="chat-time">' + timeStr(m.ts) + '</div></div></div>';
     }).join('');
     if (typing) {
-      html += '<div class="chat-row" id="typingRow">' +
-        '<div class="chat-avatar">🤔</div>' +
-        '<div class="chat-bubble typing"><i></i><i></i><i></i></div></div>';
+      html += '<div class="chat-row who-coach" id="typingRow">' +
+        '<div class="chat-avatar coach">🧑‍🏫</div>' +
+        '<div class="chat-main"><div class="chat-name coach">两人正在会诊</div>' +
+        '<div class="chat-bubble typing"><i></i><i></i><i></i></div></div></div>';
     }
     el.innerHTML = html;
     scrollLog();
@@ -341,11 +309,26 @@ var Assistant = (function () {
   function renderQuick() {
     var el = $('#chatQuick');
     if (!el) return;
-    var list = Chat.suggestions().slice(0, 4);
-    list.push('你能做什么');
+    var list = Chat.suggestions().slice(0, 3);
+    if (Agents.getMode() === 'buddy') {
+      list = ['我最近有点跑不动', '怎么才能坚持', '今天不想跑怎么办'];
+    } else if (Agents.getMode() === 'coach') {
+      list = Chat.suggestions().slice(0, 4);
+    } else {
+      list.push('你能做什么');
+    }
     el.innerHTML = list.map(function (q) {
       return '<button class="chat-chip" data-q="' + esc(q) + '">' + esc(q) + '</button>';
     }).join('');
+  }
+
+  function renderRoster() {
+    var el = $('#panelRoster');
+    if (!el) return;
+    var m = Agents.getMode();
+    [].forEach.call(el.querySelectorAll('.roster-chip'), function (b) {
+      b.classList.toggle('active', b.dataset.mode === m);
+    });
   }
 
   function saveChat() {
@@ -353,36 +336,79 @@ var Assistant = (function () {
   }
   function loadChat() {
     var saved = Store.getUI().chatLog;
-    if (Array.isArray(saved)) log = saved.slice(-CHAT_MAX);
-  }
-
-  function addMsg(role, ico, text, noBubble) {
-    log.push({ role: role, ico: ico, text: text, ts: Date.now() });
-    if (log.length > CHAT_MAX) log = log.slice(-CHAT_MAX);
-    saveChat();
-    if (panelOpen()) renderChat();
-    if (!noBubble && role === 'bot') {
-      renderQuick();
-      if (!panelOpen()) showBubble(ico, text);
+    if (Array.isArray(saved)) {
+      log = saved.slice(-CHAT_MAX).map(function (m) {
+        return { role: m.role, who: m.who || 'buddy', ico: m.ico, name: m.name, text: m.text, ts: m.ts };
+      });
     }
   }
 
-  /* 助手主动说一句：进聊天记录 + 弹气泡 */
-  function say(ico, text) {
-    if (!text || text === lastText) return;
-    lastText = text;
-    addMsg('bot', ico, text);
+  function push(m, noBubble) {
+    log.push(m);
+    if (log.length > CHAT_MAX) log = log.slice(-CHAT_MAX);
+    saveChat();
+    if (panelOpen()) renderChat();
+    if (!noBubble && m.role === 'bot') {
+      renderQuick();
+      if (!panelOpen()) showDialog([m]);
+    }
   }
 
-  /* 只弹气泡，不进聊天记录（临时提示用） */
-  function showBubble(ico, text) {
+  function addMsg(role, ico, text, noBubble, who, name) {
+    push({
+      role: role, who: who || 'buddy', ico: ico,
+      name: name || (role === 'bot' ? whoName(who) : ''),
+      text: text, ts: Date.now()
+    }, noBubble);
+  }
+
+  /* 主动说一句（单声部） */
+  function say(ico, text, who) {
+    if (!text || text === lastText) return;
+    lastText = text;
+    addMsg('bot', ico, text, false, who || 'buddy');
+  }
+
+  /* 主动说一段双人对话 */
+  function sayPair(msgs) {
+    if (!msgs || !msgs.length) return;
+    lastText = msgs[msgs.length - 1].text;
+    msgs.forEach(function (m, i) {
+      var item = {
+        role: 'bot', who: m.who, ico: m.ico, name: m.name,
+        text: m.text, ts: Date.now()
+      };
+      log.push(item);
+      if (log.length > CHAT_MAX) log = log.slice(-CHAT_MAX);
+    });
+    saveChat();
+    if (panelOpen()) renderChat();
+    else showDialog(msgs);
+    renderQuick();
+  }
+
+  /* 气泡：支持一段 / 两段 */
+  function showDialog(msgs) {
     var bubble = $('#assistantBubble');
-    if (!bubble) return;
-    $('#bubbleText').innerHTML = (ico ? '<b>' + ico + '</b> ' : '') + esc(text);
+    var box = $('#bubbleText');
+    if (!bubble || !box) return;
+    box.innerHTML = msgs.map(function (m) {
+      var who = m.who === 'buddy' ? 'buddy' : 'coach';
+      var label = m.name || whoName(who);
+      return '<div class="bub-line ' + who + '">' +
+        '<b class="bub-who">' + esc(label) + '</b>' +
+        '<span>' + esc(m.text) + '</span></div>';
+    }).join('');
     bubble.classList.add('show');
+    var total = msgs.reduce(function (a, m) { return a + (m.text || '').length; }, 0);
     clearTimeout(hideTimer);
     hideTimer = setTimeout(function () { bubble.classList.remove('show'); },
-      Calc.clamp(HIDE_MIN + text.length * 95, HIDE_MIN, HIDE_MAX));
+      Math.min(HIDE_MAX, Math.max(HIDE_MIN, HIDE_MIN + total * 60)));
+  }
+
+  /* 兼容旧签名 showBubble(ico, text) */
+  function showBubble(ico, text) {
+    showDialog([{ who: 'buddy', ico: ico, name: '小跑 · 搭子', text: text }]);
   }
 
   function hideBubble() {
@@ -390,27 +416,48 @@ var Assistant = (function () {
     if (b) b.classList.remove('show');
   }
 
-  /* ---------------- 用户提问 ---------------- */
+  /* ================= 提问：会诊 ================= */
+
   function ask(question) {
     var q = String(question || '').trim();
     if (!q) return;
     addMsg('me', '', q, true);
     typing = true;
     renderChat();
-    var t0 = Date.now();
 
-    Chat.ask(q, function (res) {
+    var t0 = Date.now();
+    Agents.consult(q, function (msgs) {
       var wait = Math.max(0, 420 - (Date.now() - t0));
-      setTimeout(function () {
-        typing = false;
-        lastText = res.text;
-        addMsg('bot', res.ico, res.text);
-        renderChat();
-      }, wait);
+      setTimeout(function () { reveal(msgs, 0); }, wait);
     });
   }
 
-  /* ---------------- 定时节奏 ---------------- */
+  function reveal(msgs, i) {
+    if (i >= msgs.length) { typing = false; renderChat(); return; }
+    typing = false;
+    var m = msgs[i];
+    lastText = m.text;
+    log.push({
+      role: 'bot', who: m.who, ico: m.ico,
+      name: m.name || whoName(m.who), text: m.text, ts: Date.now()
+    });
+    if (log.length > CHAT_MAX) log = log.slice(-CHAT_MAX);
+    saveChat();
+
+    var more = i < msgs.length - 1;
+    typing = more;
+    if (panelOpen()) renderChat();
+
+    if (!more) {
+      renderQuick();
+      if (!panelOpen()) showDialog(msgs);
+    } else {
+      setTimeout(function () { reveal(msgs, i + 1); }, 460);
+    }
+  }
+
+  /* ================= 定时节奏 ================= */
+
   function scheduleNext(first) {
     clearTimeout(timer);
     var delay = first ? rand(FIRST_DELAY_MIN, FIRST_DELAY_MAX) : rand(TICK_MIN, TICK_MAX);
@@ -420,80 +467,119 @@ var Assistant = (function () {
       scheduleNext(false);
     }, delay);
   }
-  function rand(a, b) { return a + Math.floor(Math.random() * (b - a)); }
 
   function fire() {
+    // 三成概率来一段两人的短对话 —— 这是"两个智能体在交互"最直观的样子
+    if (Math.random() < 0.34) {
+      var pair = Agents.banter();
+      if (pair && pair.length) {
+        sayPair(pair);
+        return;
+      }
+    }
     var pool = dynamicMessages();
     for (var i = 0; i < 5; i++) {
       var m = pool[Math.floor(Math.random() * pool.length)];
       if (!m || m.text === lastText) continue;
-      say(m.ico, m.text);
+      say(m.ico, m.text, 'buddy');
       return;
     }
   }
 
-  /* ---------------- 对外事件 ---------------- */
-  function onRunLogged(run) {
+  /* ================= 后台会诊：数据变了 ================= */
+
+  function runBackstage(kind, payload, delay) {
     setTimeout(function () {
-      var f = runFeedback(run);
-      say(f.ico, f.text);
-    }, 700);
-  }
-  function onCheckin(streak) {
-    setTimeout(function () {
-      var f = checkinFeedback(streak || Store.currentStreak());
-      say(f.ico, f.text);
-    }, 600);
-  }
-  function onGoalSaved() {
-    setTimeout(function () {
-      var f = goalFeedback();
-      if (f) say(f.ico, f.text);
-    }, 700);
-  }
-  function onProfileSaved() {
-    setTimeout(function () {
-      var ev = Calc.evaluateBody(Store.getProfile(), Store.getRuns(), Store.getCheckins());
-      say('🧭', '身体信息已更新，我重新算了一下：当前状态评分 ' + ev.score + ' 分（' + ev.level + '）。去「训练推荐」和「饮食推荐」看看新方案吧。');
-    }, 700);
-  }
-  function onBodyLogged() {
-    setTimeout(function () {
-      say('⚖️', '身体数据记下来了。建议每周固定同一时间（晨起空腹）称重，看趋势比看单次数字靠谱得多。');
-    }, 700);
-  }
-  function onImported(n) {
-    setTimeout(function () {
-      say('📥', '已经帮你导入 ' + n + ' 条跑步记录，跑量、配速、评估和推荐我都重新算过了。');
-    }, 600);
+      Agents.backstage(kind, payload, function (msg) {
+        if (msg) say(msg.ico, msg.text, 'buddy');
+      });
+    }, delay || 700);
   }
 
-  /* ---------------- 初始化 ---------------- */
+  function onRunLogged(run) { AgentBus.invalidate(); runBackstage('run', run, 800); }
+  function onCheckin(streak) { AgentBus.invalidate(); runBackstage('checkin', streak || Store.currentStreak(), 600); }
+  function onGoalSaved() { AgentBus.invalidate(); runBackstage('goal', null, 800); }
+  function onProfileSaved() { AgentBus.invalidate(); runBackstage('profile', null, 800); }
+  function onBodyLogged() { AgentBus.invalidate(); runBackstage('body', null, 800); }
+  function onImported(n) { AgentBus.invalidate(); runBackstage('import', n, 600); }
+
+  /* 任何写操作都可以顺手广播一下，后台会自行决定要不要说话 */
+  function broadcast(evt, payload) {
+    AgentBus.invalidate();
+    AgentBus.emit(evt, payload);
+  }
+
+  /* ================= 开场 ================= */
+
+  function opening() {
+    var d = AgentBus.data();
+    var h = new Date().getHours();
+    var when = h < 5 ? '这个点还没睡' : h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好';
+    var name = d.name;
+
+    var coachTxt;
+    if (!d.totalRuns) {
+      coachTxt = '我是陈教。你还没有一条跑步记录，所以我没法给你任何判断。先跑一次，哪怕 20 分钟，剩下的我来。';
+    } else if (d.gapDays >= 5) {
+      coachTxt = '我是陈教。你已经 ' + d.gapDays + ' 天没跑了，这个间隔再拖下去，之前攒的有氧底子会开始掉。今天先恢复 20 分钟。';
+    } else if (d.body && d.body.score < 60) {
+      coachTxt = '我是陈教。你现在身体评分 ' + d.body.score + ' 分，偏低。这两天别冲量，先把睡眠补回来。';
+    } else {
+      coachTxt = '我是陈教。近 7 天 ' + d.weekKm + ' km，' +
+        (d.deltaPct === null ? '刚起头，先跑稳。' :
+          d.deltaPct >= 10 ? '在往上走，节奏是对的。' :
+            d.deltaPct <= -15 ? '比上周少了，得盯一下。' : '基本持平，保持住。');
+    }
+
+    var buddyTxt = when + '，' + name + '。我是小跑，就住在你旁边这一格 —— ' +
+      (d.checkedToday ? '今天已经打过卡了，我不催你，陪你聊两句。'
+        : d.streak >= 3 ? '你已经连着 ' + d.streak + ' 天了，今天别断在这儿。'
+          : '不着急，先跟我说说今天什么状态。');
+
+    return [
+      { who: 'coach', ico: '🧑‍🏫', name: '陈教 · 教练', text: coachTxt },
+      { who: 'buddy', ico: '🐣', name: '小跑 · 搭子', text: buddyTxt }
+    ];
+  }
+
+  /* ================= 初始化 ================= */
+
   function init() {
     if (started) return;
     started = true;
 
+    Agents.hydrate();
+
     var svg = document.getElementById('assistantSvg');
     if (svg) svg.innerHTML = svgMarkup();
+    var csvg = document.getElementById('coachSvg');
+    if (csvg) csvg.innerHTML = coachSvgMarkup();
 
     loadChat();
     renderChat();
     renderQuick();
+    renderRoster();
 
     var body = $('#assistantBody');
+    var coachHead = $('#assistantCoachHead');
     var panel = $('#assistantPanel');
 
-    body.addEventListener('click', function () {
+    function togglePanel() {
       hideBubble();
       var open = panel.classList.toggle('show');
       if (open) {
         renderChat();
         renderQuick();
+        renderRoster();
         setTimeout(function () { var i = $('#chatInput'); if (i) i.focus(); }, 120);
       }
-    });
+    }
+
+    if (body) body.addEventListener('click', togglePanel);
+    if (coachHead) coachHead.addEventListener('click', togglePanel);
     $('#panelClose').addEventListener('click', function () { panel.classList.remove('show'); });
     $('#bubbleClose').addEventListener('click', function (e) { e.stopPropagation(); hideBubble(); });
+
     document.addEventListener('click', function (e) {
       if (!e.target.closest('#assistant')) panel.classList.remove('show');
     });
@@ -510,6 +596,17 @@ var Assistant = (function () {
       if (b) ask(b.dataset.q);
     });
 
+    var roster = $('#panelRoster');
+    if (roster) {
+      roster.addEventListener('click', function (e) {
+        var b = e.target.closest('.roster-chip');
+        if (!b) return;
+        Agents.setMode(b.dataset.mode);
+        renderRoster();
+        renderQuick();
+      });
+    }
+
     $('#chatClear').addEventListener('click', function () {
       log = [];
       saveChat();
@@ -518,21 +615,29 @@ var Assistant = (function () {
       if (window.toast) window.toast('对话已清空');
     });
 
-    // 打招呼
+    // 开场：两人各一句
     setTimeout(function () {
-      var g = greeting();
-      lastText = g.text;
-      addMsg('bot', g.ico, g.text);
-      if (!panelOpen()) showBubble(g.ico, g.text);
-    }, 1200);
+      var pair = opening();
+      lastText = pair[pair.length - 1].text;
+      pair.forEach(function (m) {
+        log.push({ role: 'bot', who: m.who, ico: m.ico, name: m.name, text: m.text, ts: Date.now() });
+      });
+      saveChat();
+      renderChat();
+      renderQuick();
+      if (!panelOpen()) showDialog(pair);
+    }, 1300);
 
-    // 预取天气
     fetchWeather(function (w) { weather = w; });
+    LLM.ensure(function () { /* 静默预热：成功了以后提问就是大模型在组织语言 */ });
 
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) clearTimeout(timer);
       else scheduleNext(true);
     });
+
+    // 数据变了 → 广播 + 作废快照，保证两人看到的是最新数字
+    AgentBus.on('data:changed', function () { AgentBus.invalidate(); });
 
     scheduleNext(true);
   }
@@ -545,15 +650,17 @@ var Assistant = (function () {
     onProfileSaved: onProfileSaved,
     onBodyLogged: onBodyLogged,
     onImported: onImported,
+    broadcast: broadcast,
     ask: ask,
     show: say,
-    // 调试 / 自测用
     _fetchWeather: fetchWeather,
     _weatherAdvice: weatherAdvice,
     _weatherLine: weatherLine,
     _current: function () { return weather; },
     _log: function () { return log; },
-    _renderChat: renderChat
+    _renderChat: renderChat,
+    _opening: opening,
+    _reveal: reveal
   };
 })();
 
